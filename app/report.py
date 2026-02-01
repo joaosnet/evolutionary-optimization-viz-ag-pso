@@ -268,7 +268,8 @@ def generate_latex(data: dict) -> str:
 }
 
 \title{\textbf{Comparação entre Algoritmo Genético e PSO\\na Otimização de Funções Multimodais}}
-\author{Sistema de Visualização AG vs PSO\\
+\author{João da Cruz de Natividade e Silva Neto\\
+\small UFPA -- Universidade Federal do Pará\\
 \small Gerado em: """
         + date_str
         + r"""}
@@ -639,10 +640,10 @@ Conclusões principais:
 \end{itemize}
 
 %==============================================================================
-\section*{Info. Sistema}
+\section*{Informações}
 %==============================================================================
 
-Gerado automaticamente.
+Relatório gerado a partir de simulação computacional.
 \begin{itemize}
     \item \textbf{Data}: """
         + datetime.now().strftime("%d/%m/%y %H:%M")

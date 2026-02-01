@@ -1429,7 +1429,7 @@ function generatePdfReport() {
         cursorY += 5;
         doc.setFontSize(8);
         doc.setTextColor(100);
-        addText(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 8, 'italic');
+        addText(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 8, 'italic');
 
 
         // Save PDF
