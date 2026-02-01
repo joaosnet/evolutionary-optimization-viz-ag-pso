@@ -169,6 +169,10 @@ function connectWebSocket() {
         }
     };
     ws.onclose = () => { isRunning = false; updateStartBtnText(); };
+    ws.onopen = () => {
+        // Send initial reset to get the starting state (Iteration 0)
+        resetSimulation();
+    };
 }
 
 function requestStep() {
