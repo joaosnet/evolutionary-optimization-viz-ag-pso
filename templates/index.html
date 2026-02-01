@@ -8,7 +8,9 @@
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive@0.100.0/dist/mathlive.min.css">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
 </head>
 
 <body>
@@ -25,32 +27,29 @@
                         <span class="toggle-icon">🌐</span>
                         <span class="toggle-text">EN</span>
                     </button>
-                    <button id="themeToggle" class="toggle-btn" title="Toggle Dark/Light Mode" aria-label="Toggle theme">
+                    <button id="themeToggle" class="toggle-btn" title="Toggle Dark/Light Mode"
+                        aria-label="Toggle theme">
                         <span class="toggle-icon">🌙</span>
                         <span class="toggle-text" data-i18n="theme_label">Theme</span>
                     </button>
                 </div>
                 <div class="control-group">
-                    <button id="startBtn" class="primary-btn" onclick="toggleSimulation()" data-i18n="start">Start</button>
+                    <button id="startBtn" class="primary-btn" onclick="toggleSimulation()"
+                        data-i18n="start">Start</button>
                     <button id="resetBtn" class="ghost-btn" onclick="resetSimulation()" data-i18n="reset">Reset</button>
-                    <span id="iteration-display" class="iteration-pill" aria-live="polite">
-                        <span class="label-text" data-i18n="iteration">Iteration</span>
-                        <span class="label-value" id="iteration-value">0</span>
-                    </span>
-                </div>
-                <div class="control-group seek-group">
-                    <div class="seek-wrapper">
-                        <label class="label-line seek-label" for="iteration_seek">
-                            <span class="label-text" data-i18n="seek_iteration">Seek</span>
-                            <span class="label-value" id="seek-value">0</span>
-                        </label>
-                        <div class="seek-inputs">
-                            <input type="range" id="iteration_seek" min="0" max="0" value="0">
-                            <input type="number" id="iteration_seek_input" min="0" value="0">
-                        </div>
+                    <div class="iteration-controls">
+                        <button id="stepBackBtn" class="nav-btn" onclick="stepBackward()" title="Previous Iteration"
+                            disabled>◀</button>
+                        <span id="iteration-display" class="iteration-pill" aria-live="polite">
+                            <span class="label-text" data-i18n="iteration">Iteration</span>
+                            <span class="label-value" id="iteration-value">0</span>
+                        </span>
+                        <button id="stepForwardBtn" class="nav-btn" onclick="stepForward()" title="Next Iteration"
+                            disabled>▶</button>
+                        <button id="continueBtn" class="continue-btn" onclick="continueSimulation()"
+                            title="Continue from here" style="display: none;" data-i18n="continue">Continue</button>
                     </div>
                 </div>
-            </div>
         </header>
 
         <details class="settings-panel">
@@ -66,7 +65,8 @@
                         <span class="label-line">
                             <span class="label-text" data-i18n="function_label">Function</span>
                         </span>
-                        <math-field id="function_expr" class="function-input" virtual-keyboard-mode="onfocus"></math-field>
+                        <math-field id="function_expr" class="function-input"
+                            virtual-keyboard-mode="onfocus"></math-field>
                         <div id="function-error" class="field-error" role="status" aria-live="polite"></div>
                     </label>
                     <label class="label-row">
@@ -112,6 +112,27 @@
                         </span>
                         <input type="number" id="optimization_target" value="0" step="0.1"
                             oninput="document.getElementById('val-target').innerText = this.value">
+                    </label>
+                    <hr class="settings-divider">
+                    <label class="label-row checkbox-row">
+                        <input type="checkbox" id="convergence_enabled">
+                        <span class="label-text" data-i18n="convergence_stop">Stop on Convergence</span>
+                    </label>
+                    <label class="convergence-field">
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="convergence_threshold">Threshold</span>
+                            <span class="label-value" id="val-conv-threshold">1e-6</span>
+                        </span>
+                        <input type="number" id="convergence_threshold" value="0.000001" step="0.000001" min="0"
+                            oninput="document.getElementById('val-conv-threshold').innerText = parseFloat(this.value).toExponential()">
+                    </label>
+                    <label class="convergence-field">
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="convergence_window">Window (iters)</span>
+                            <span class="label-value" id="val-conv-window">20</span>
+                        </span>
+                        <input type="range" id="convergence_window" min="5" max="100" step="5" value="20"
+                            oninput="document.getElementById('val-conv-window').innerText = this.value">
                     </label>
                 </div>
 
@@ -197,7 +218,8 @@
                 </div>
                 <div class="stats">
                     <div class="stat-item">
-                        <span class="label"><span data-i18n="best_value">Best Value</span> <span class="mode-tag best-mode-label">MAX</span></span>
+                        <span class="label"><span data-i18n="best_value">Best Value</span> <span
+                                class="mode-tag best-mode-label">MAX</span></span>
                         <span class="value" id="ag-score">Inf</span>
                     </div>
                 </div>
@@ -232,7 +254,8 @@
                 </div>
                 <div class="stats">
                     <div class="stat-item">
-                        <span class="label"><span data-i18n="best_value">Best Value</span> <span class="mode-tag best-mode-label">MAX</span></span>
+                        <span class="label"><span data-i18n="best_value">Best Value</span> <span
+                                class="mode-tag best-mode-label">MAX</span></span>
                         <span class="value" id="pso-score">Inf</span>
                     </div>
                 </div>

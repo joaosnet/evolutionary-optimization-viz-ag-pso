@@ -13,6 +13,8 @@ class GeneticAlgorithm(OptimizationAlgorithm):
         crossover_rate=0.7,
         optimization_mode="max",
         target_value=0.0,
+        convergence_threshold=1e-6,
+        convergence_window=20,
     ):
         super().__init__(
             func,
@@ -21,6 +23,8 @@ class GeneticAlgorithm(OptimizationAlgorithm):
             dimensions,
             optimization_mode=optimization_mode,
             target_value=target_value,
+            convergence_threshold=convergence_threshold,
+            convergence_window=convergence_window,
         )
         self.mutation_rate = mutation_rate
         self.crossover_rate = crossover_rate
@@ -70,6 +74,7 @@ class GeneticAlgorithm(OptimizationAlgorithm):
         self.mutation()
 
         self.update_best()
+        self.check_convergence()
         self.record_state()
 
     def tournament_selection(self, scores, k=3):

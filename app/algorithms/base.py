@@ -61,6 +61,8 @@ class OptimizationAlgorithm(ABC):
         dimensions,
         optimization_mode="max",
         target_value=0.0,
+        convergence_threshold=1e-6,
+        convergence_window=20,
     ):
         self.func = func
         self.bounds = np.array(bounds)
@@ -73,6 +75,12 @@ class OptimizationAlgorithm(ABC):
         self.best_score = self._initial_best_score()
         self.history = []
         self.iteration = 0
+        
+        # Convergence detection
+        self.convergence_threshold = float(convergence_threshold)
+        self.convergence_window = int(convergence_window)
+        self.score_history = []  # Last N best scores for convergence check
+        self.converged = False
 
     def _normalize_mode(self, mode):
         if not mode:
@@ -138,6 +146,29 @@ class OptimizationAlgorithm(ABC):
             return None
         return self.history[iteration]
 
+    def check_convergence(self):
+        """Check if algorithm has converged based on score improvement."""
+        self.score_history.append(float(self.best_score))
+        
+        # Keep only last N scores
+        if len(self.score_history) > self.convergence_window:
+            self.score_history = self.score_history[-self.convergence_window:]
+        
+        # Need full window to check convergence
+        if len(self.score_history) < self.convergence_window:
+            return False
+        
+        # Calculate max improvement over window
+        scores = np.array(self.score_history)
+        improvement = np.abs(scores[-1] - scores[0])
+        
+        # Check if improvement is below threshold
+        if improvement < self.convergence_threshold:
+            self.converged = True
+            return True
+        
+        return False
+
     def get_state(self):
         """Returns the current state for visualization."""
         if hasattr(self, 'population'):
@@ -145,6 +176,7 @@ class OptimizationAlgorithm(ABC):
                 "iteration": self.iteration,
                 "population": self.population.tolist(),
                 "best_score": float(self.best_score),
-                "max_iteration": max(len(self.history) - 1, 0)
+                "max_iteration": max(len(self.history) - 1, 0),
+                "converged": self.converged
             }
         return {}

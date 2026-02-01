@@ -9,15 +9,12 @@ const functionInputEl = document.getElementById('function_expr');
 const dimensionsInputEl = document.getElementById('dimensions');
 const functionErrorEl = document.getElementById('function-error');
 const fixedDimsGridEl = document.getElementById('fixed-dims-grid');
-const iterationSeekEl = document.getElementById('iteration_seek');
-const iterationSeekInputEl = document.getElementById('iteration_seek_input');
-const iterationSeekValueEl = document.getElementById('seek-value');
 
 let ws;
 let isRunning = false;
 let currentIteration = 0;
+let maxComputedIteration = 0;
 let resizeTimer;
-let isSeeking = false;
 
 const historyCache = {
     ag: [],
@@ -101,7 +98,12 @@ const translations = {
         ag_series: "Genetic Algorithm",
         pso_series: "Particle Swarm",
         surface_opacity: "Surface",
-        point_size: "Points"
+        point_size: "Points",
+        convergence_stop: "Stop on Convergence",
+        convergence_threshold: "Threshold",
+        convergence_window: "Window (iters)",
+        converged_msg: "Converged!",
+        continue: "Continue"
     },
     pt: {
         eyebrow: "Otimização ao Vivo",
@@ -147,7 +149,12 @@ const translations = {
         ag_series: "Algoritmo Genético",
         pso_series: "Enxame de Partículas",
         surface_opacity: "Superfície",
-        point_size: "Pontos"
+        point_size: "Pontos",
+        convergence_stop: "Parar ao Convergir",
+        convergence_threshold: "Limiar",
+        convergence_window: "Janela (iters)",
+        converged_msg: "Convergiu!",
+        continue: "Continuar"
     }
 };
 
@@ -203,8 +210,8 @@ function updateStartBtnText() {
 
 function normalizeExpression(expr) {
     return expr
-    .replace(/[\u2217\u22C5\u00D7]/g, '*')
-    .replace(/[\u2212\u2012\u2013\u2014]/g, '-')
+        .replace(/[\u2217\u22C5\u00D7]/g, '*')
+        .replace(/[\u2212\u2012\u2013\u2014]/g, '-')
         .replace(/\bln\b/g, 'log')
         .replace(/x_\{?\s*(\d+)\s*\}?/g, 'x$1')
         .trim();
@@ -356,11 +363,25 @@ const layout3D = {
 };
 
 const layoutConvergence = {
-    margin: { l: 40, r: 20, b: 40, t: 20 },
+    autosize: true,
+    margin: { l: 55, r: 25, b: 45, t: 30 },
     paper_bgcolor: 'rgba(0,0,0,0)',
     plot_bgcolor: 'rgba(0,0,0,0)',
-    xaxis: { title: { text: 'Iteration' } },
-    yaxis: { title: { text: 'Fitness' } }
+    xaxis: {
+        title: { text: 'Iteration', standoff: 10 },
+        automargin: true
+    },
+    yaxis: {
+        title: { text: 'Fitness', standoff: 10 },
+        automargin: true
+    },
+    legend: {
+        orientation: 'h',
+        yanchor: 'bottom',
+        y: 1.02,
+        xanchor: 'center',
+        x: 0.5
+    }
 };
 
 function getSeriesNames() {
@@ -572,6 +593,27 @@ function updateDashboard(data) {
     // Update Convergence Chart
     if (data.ag && data.pso) {
         renderConvergence(data.ag.iteration);
+
+        // Check for convergence and auto-stop
+        const agConverged = data.ag.converged === true;
+        const psoConverged = data.pso.converged === true;
+
+        if (agConverged || psoConverged) {
+            const convergenceEnabledEl = document.getElementById('convergence_enabled');
+            if (convergenceEnabledEl && convergenceEnabledEl.checked && isRunning) {
+                isRunning = false;
+                updateStartBtnText();
+
+                // Show convergence notification
+                const convergedMsg = translations[currentLang].converged_msg || 'Converged!';
+                const who = agConverged && psoConverged ? 'AG & PSO' :
+                    agConverged ? 'AG' : 'PSO';
+                if (functionErrorEl) {
+                    functionErrorEl.textContent = `✓ ${who} ${convergedMsg}`;
+                    functionErrorEl.classList.add('success-message');
+                }
+            }
+        }
     }
 }
 
@@ -584,6 +626,13 @@ function toggleSimulation() {
 
 function resetSimulation() {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+    // Clear any previous convergence message
+    if (functionErrorEl) {
+        functionErrorEl.textContent = '';
+        functionErrorEl.classList.remove('success-message');
+    }
+
     if (!compiledExpression) {
         compileExpression();
     }
@@ -607,6 +656,10 @@ function resetSimulation() {
         { x: [], y: [], mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } }
     ]);
 
+    const convergenceEnabledEl = document.getElementById('convergence_enabled');
+    const convergenceThresholdEl = document.getElementById('convergence_threshold');
+    const convergenceWindowEl = document.getElementById('convergence_window');
+
     const params = {
         action: "reset",
         function_expr: currentExpression,
@@ -618,7 +671,10 @@ function resetSimulation() {
         pso_c1: parseFloat(document.getElementById('pso_c1').value),
         pso_c2: parseFloat(document.getElementById('pso_c2').value),
         optimization_mode: getOptimizationMode(),
-        target_value: getTargetValue()
+        target_value: getTargetValue(),
+        convergence_enabled: convergenceEnabledEl ? convergenceEnabledEl.checked : false,
+        convergence_threshold: convergenceThresholdEl ? parseFloat(convergenceThresholdEl.value) : 1e-6,
+        convergence_window: convergenceWindowEl ? parseInt(convergenceWindowEl.value) : 20
     };
     ws.send(JSON.stringify(params));
 }
@@ -630,20 +686,57 @@ function requestSeek(iteration) {
     ws.send(JSON.stringify({ action: "seek", iteration }));
 }
 
-function updateSeekControls(maxIteration, current) {
-    if (iterationSeekEl) {
-        iterationSeekEl.max = String(maxIteration);
-        if (!isSeeking) iterationSeekEl.value = String(current);
+function stepForward() {
+    if (currentIteration < maxComputedIteration) {
+        requestSeek(currentIteration + 1);
     }
-    if (iterationSeekInputEl) {
-        iterationSeekInputEl.max = String(maxIteration);
-        if (!isSeeking) iterationSeekInputEl.value = String(current);
+}
+
+function stepBackward() {
+    if (currentIteration > 0) {
+        requestSeek(currentIteration - 1);
+    }
+}
+
+function continueSimulation() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // First, restore to max iteration, then start running
+    ws.send(JSON.stringify({ action: "continue" }));
+    isRunning = true;
+    updateStartBtnText();
+    // Wait for response then start stepping
+    const originalOnMessage = ws.onmessage;
+    ws.onmessage = (event) => {
+        ws.onmessage = originalOnMessage;
+        originalOnMessage(event);
+        if (isRunning) requestStep();
+    };
+}
+
+function updateSeekControls(maxIteration, current) {
+    maxComputedIteration = maxIteration;
+    // Update navigation button states
+    updateNavigationButtons(current, maxIteration);
+}
+
+function updateNavigationButtons(current, maxIter) {
+    const prevBtn = document.getElementById('stepBackBtn');
+    const nextBtn = document.getElementById('stepForwardBtn');
+    const continueBtn = document.getElementById('continueBtn');
+
+    if (prevBtn) prevBtn.disabled = current <= 0;
+    if (nextBtn) nextBtn.disabled = current >= maxIter;
+    if (continueBtn) {
+        // Show continue button only when viewing past iteration and not at max
+        const isViewingPast = current < maxIter;
+        continueBtn.style.display = isViewingPast ? 'inline-flex' : 'none';
     }
 }
 
 function resetHistoryCache() {
     historyCache.ag = [];
     historyCache.pso = [];
+    maxComputedIteration = 0;
     renderConvergence(0);
 }
 
@@ -814,31 +907,7 @@ function initOptimizationControls() {
     updateModeLabels();
 }
 
-function initSeekControls() {
-    if (iterationSeekEl) {
-        iterationSeekEl.addEventListener('input', () => {
-            isSeeking = true;
-            const value = parseInt(iterationSeekEl.value, 10) || 0;
-            if (iterationSeekValueEl) iterationSeekValueEl.textContent = String(value);
-            if (iterationSeekInputEl) iterationSeekInputEl.value = String(value);
-            requestSeek(value);
-        });
-        iterationSeekEl.addEventListener('change', () => {
-            isSeeking = false;
-        });
-    }
 
-    if (iterationSeekInputEl) {
-        iterationSeekInputEl.addEventListener('change', () => {
-            isSeeking = true;
-            const value = parseInt(iterationSeekInputEl.value, 10) || 0;
-            if (iterationSeekEl) iterationSeekEl.value = String(value);
-            if (iterationSeekValueEl) iterationSeekValueEl.textContent = String(value);
-            requestSeek(value);
-            isSeeking = false;
-        });
-    }
-}
 
 function initExpressionControls() {
     if (functionInputEl) {
@@ -895,12 +964,11 @@ function resizePlots() {
 
 // --- Init ---
 window.onload = () => {
+    initPlots();  // Must run FIRST before any function that uses Plotly
     initLanguage();
     initExpressionControls();
-    initPlots();
     initTheme();
     initOptimizationControls();
-    initSeekControls();
     connectWebSocket();
     initPlotControls();
     window.addEventListener('resize', resizePlots);

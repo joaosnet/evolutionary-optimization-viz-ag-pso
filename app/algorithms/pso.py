@@ -14,6 +14,8 @@ class ParticleSwarmOptimization(OptimizationAlgorithm):
         c2=1.5,
         optimization_mode="max",
         target_value=0.0,
+        convergence_threshold=1e-6,
+        convergence_window=20,
     ):
         super().__init__(
             func,
@@ -22,6 +24,8 @@ class ParticleSwarmOptimization(OptimizationAlgorithm):
             dimensions,
             optimization_mode=optimization_mode,
             target_value=target_value,
+            convergence_threshold=convergence_threshold,
+            convergence_window=convergence_window,
         )
         self.w = w  # Inertia weight
         self.c1 = c1  # Cognitive (personal best) weight
@@ -42,11 +46,13 @@ class ParticleSwarmOptimization(OptimizationAlgorithm):
 
     def snapshot_state(self):
         state = super().snapshot_state()
-        state.update({
-            "velocities": self.velocities.tolist(),
-            "pbest": self.pbest.tolist(),
-            "pbest_scores": self.pbest_scores.tolist(),
-        })
+        state.update(
+            {
+                "velocities": self.velocities.tolist(),
+                "pbest": self.pbest.tolist(),
+                "pbest_scores": self.pbest_scores.tolist(),
+            }
+        )
         return state
 
     def restore_state(self, snapshot):
@@ -98,4 +104,5 @@ class ParticleSwarmOptimization(OptimizationAlgorithm):
             )
 
         self.update_best()
+        self.check_convergence()
         self.record_state()
