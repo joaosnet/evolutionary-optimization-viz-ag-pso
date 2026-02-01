@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.algorithms.ag import GeneticAlgorithm
 from app.algorithms.pso import ParticleSwarmOptimization
-from app.algorithms.base import rastrigin
+from app.algorithms.base import rastrigin, build_expression_function
 import json
 import os
 
@@ -24,15 +24,17 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
     # Simulation Parameters
-    bounds = [[-5.12, 5.12], [-5.12, 5.12]]  # Rastrigin bounds
     pop_size = 50
     dims = 2
+    bounds = [[-5.12, 5.12] for _ in range(dims)]
     optimization_mode = "max"
     target_value = 0.0
+    function_expr = None
+    current_func = rastrigin
 
     # Initialize Algorithms
     ag = GeneticAlgorithm(
-        rastrigin,
+        current_func,
         bounds,
         population_size=pop_size,
         dimensions=dims,
@@ -40,7 +42,7 @@ async def websocket_endpoint(websocket: WebSocket):
         target_value=target_value,
     )
     pso = ParticleSwarmOptimization(
-        rastrigin,
+        current_func,
         bounds,
         population_size=pop_size,
         dimensions=dims,
@@ -72,11 +74,48 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 response = {"ag": ag.get_state(), "pso": pso.get_state()}
                 await websocket.send_json(response)
+            elif action == "seek":
+                iteration = int(data.get("iteration", 0) or 0)
+                ag_state = ag.get_state_at(iteration)
+                pso_state = pso.get_state_at(iteration)
+
+                if ag_state is None or pso_state is None:
+                    response = {
+                        "error": "Iteration not available.",
+                        "ag": ag.get_state(),
+                        "pso": pso.get_state(),
+                    }
+                    await websocket.send_json(response)
+                    continue
+
+                ag.restore_state(ag_state)
+                pso.restore_state(pso_state)
+                ag.history = ag.history[: iteration + 1]
+                pso.history = pso.history[: iteration + 1]
+
+                response = {"ag": ag.get_state(), "pso": pso.get_state()}
+                await websocket.send_json(response)
             elif action == "reset":
                 # Extract params or use defaults
                 pop_size = data.get("pop_size", 50)
                 optimization_mode = data.get("optimization_mode", "max")
                 target_value = data.get("target_value", 0.0)
+                dims = int(data.get("dimensions", dims) or dims)
+                dims = max(2, dims)
+                bounds = [[-5.12, 5.12] for _ in range(dims)]
+                function_expr = data.get("function_expr")
+
+                if function_expr:
+                    try:
+                        current_func = build_expression_function(function_expr, dims)
+                    except ValueError as err:
+                        current_func = current_func or rastrigin
+                        error_message = str(err)
+                    else:
+                        error_message = None
+                else:
+                    current_func = rastrigin
+                    error_message = None
 
                 # AG Params
                 ag_mut = data.get("ag_mutation", 0.01)
@@ -88,7 +127,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 pso_c2 = data.get("pso_c2", 1.5)
 
                 ag = GeneticAlgorithm(
-                    rastrigin,
+                    current_func,
                     bounds,
                     population_size=pop_size,
                     dimensions=dims,
@@ -98,7 +137,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     target_value=target_value,
                 )
                 pso = ParticleSwarmOptimization(
-                    rastrigin,
+                    current_func,
                     bounds,
                     population_size=pop_size,
                     dimensions=dims,
@@ -109,6 +148,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     target_value=target_value,
                 )
                 response = {"ag": ag.get_state(), "pso": pso.get_state()}
+                if error_message:
+                    response["error"] = error_message
                 await websocket.send_json(response)
 
     except Exception as e:

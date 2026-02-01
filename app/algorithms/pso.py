@@ -38,6 +38,22 @@ class ParticleSwarmOptimization(OptimizationAlgorithm):
         self.pbest_scores = np.full(self.pop_size, self._initial_best_objective())
 
         self.update_best()
+        self.record_state()
+
+    def snapshot_state(self):
+        state = super().snapshot_state()
+        state.update({
+            "velocities": self.velocities.tolist(),
+            "pbest": self.pbest.tolist(),
+            "pbest_scores": self.pbest_scores.tolist(),
+        })
+        return state
+
+    def restore_state(self, snapshot):
+        super().restore_state(snapshot)
+        self.velocities = np.array(snapshot.get("velocities", []), dtype=float)
+        self.pbest = np.array(snapshot.get("pbest", []), dtype=float)
+        self.pbest_scores = np.array(snapshot.get("pbest_scores", []), dtype=float)
 
     def update_best(self):
         raw_scores = self.func(self.population)
@@ -82,3 +98,4 @@ class ParticleSwarmOptimization(OptimizationAlgorithm):
             )
 
         self.update_best()
+        self.record_state()

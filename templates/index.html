@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AG vs PSO - Optimization Dashboard</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive@0.100.0/dist/mathlive.min.css">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -32,7 +33,22 @@
                 <div class="control-group">
                     <button id="startBtn" class="primary-btn" onclick="toggleSimulation()" data-i18n="start">Start</button>
                     <button id="resetBtn" class="ghost-btn" onclick="resetSimulation()" data-i18n="reset">Reset</button>
-                    <span id="iteration-display" class="iteration-pill" data-i18n="iteration" aria-live="polite">Iteration: 0</span>
+                    <span id="iteration-display" class="iteration-pill" aria-live="polite">
+                        <span class="label-text" data-i18n="iteration">Iteration</span>
+                        <span class="label-value" id="iteration-value">0</span>
+                    </span>
+                </div>
+                <div class="control-group seek-group">
+                    <div class="seek-wrapper">
+                        <label class="label-line seek-label" for="iteration_seek">
+                            <span class="label-text" data-i18n="seek_iteration">Seek</span>
+                            <span class="label-value" id="seek-value">0</span>
+                        </label>
+                        <div class="seek-inputs">
+                            <input type="range" id="iteration_seek" min="0" max="0" value="0">
+                            <input type="number" id="iteration_seek_input" min="0" value="0">
+                        </div>
+                    </div>
                 </div>
             </div>
         </header>
@@ -46,13 +62,38 @@
                 <!-- Global Settings -->
                 <div class="setting-group">
                     <h3 data-i18n="global">Global</h3>
+                    <label class="label-row">
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="function_label">Function</span>
+                        </span>
+                        <math-field id="function_expr" class="function-input" virtual-keyboard-mode="onfocus"></math-field>
+                        <div id="function-error" class="field-error" role="status" aria-live="polite"></div>
+                    </label>
+                    <label class="label-row">
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="dimensions">Dimensions</span>
+                            <span class="label-value" id="val-dimensions">2</span>
+                        </span>
+                        <input type="number" id="dimensions" min="2" max="12" value="2"
+                            oninput="document.getElementById('val-dimensions').innerText = this.value">
+                    </label>
+                    <div class="fixed-dims" id="fixed-dims">
+                        <div class="fixed-title" data-i18n="fixed_values">Fixed values (x3+)</div>
+                        <div class="fixed-grid" id="fixed-dims-grid"></div>
+                    </div>
                     <label>
-                        <span data-i18n="pop_size">Population</span>: <span id="val-pop">50</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="pop_size">Population</span>
+                            <span class="label-value" id="val-pop">50</span>
+                        </span>
                         <input type="range" id="pop_size" min="10" max="200" value="50"
                             oninput="document.getElementById('val-pop').innerText = this.value">
                     </label>
                     <label>
-                        <span data-i18n="delay">Delay (ms)</span>: <span id="val-delay">0</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="delay">Delay (ms)</span>
+                            <span class="label-value" id="val-delay">0</span>
+                        </span>
                         <input type="range" id="sim_delay" min="0" max="1000" step="50" value="0"
                             oninput="document.getElementById('val-delay').innerText = this.value">
                     </label>
@@ -65,7 +106,10 @@
                         </select>
                     </label>
                     <label class="target-field">
-                        <span data-i18n="target_value">Target</span>: <span id="val-target">0</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="target_value">Target</span>
+                            <span class="label-value" id="val-target">0</span>
+                        </span>
                         <input type="number" id="optimization_target" value="0" step="0.1"
                             oninput="document.getElementById('val-target').innerText = this.value">
                     </label>
@@ -75,12 +119,18 @@
                 <div class="setting-group">
                     <h3 data-i18n="ag_title">Genetic Algorithm</h3>
                     <label>
-                        <span data-i18n="ag_mut">Mutation Rate</span>: <span id="val-mut">0.01</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="ag_mut">Mutation Rate</span>
+                            <span class="label-value" id="val-mut">0.01</span>
+                        </span>
                         <input type="range" id="ag_mutation" min="0" max="0.1" step="0.001" value="0.01"
                             oninput="document.getElementById('val-mut').innerText = this.value">
                     </label>
                     <label>
-                        <span data-i18n="ag_cross">Crossover Rate</span>: <span id="val-cross">0.7</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="ag_cross">Crossover Rate</span>
+                            <span class="label-value" id="val-cross">0.7</span>
+                        </span>
                         <input type="range" id="ag_crossover" min="0" max="1" step="0.05" value="0.7"
                             oninput="document.getElementById('val-cross').innerText = this.value">
                     </label>
@@ -90,17 +140,26 @@
                 <div class="setting-group">
                     <h3 data-i18n="pso_title">Particle Swarm (PSO)</h3>
                     <label>
-                        <span data-i18n="pso_w">Inertia (w)</span>: <span id="val-w">0.5</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="pso_w">Inertia (w)</span>
+                            <span class="label-value" id="val-w">0.5</span>
+                        </span>
                         <input type="range" id="pso_w" min="0" max="1" step="0.05" value="0.5"
                             oninput="document.getElementById('val-w').innerText = this.value">
                     </label>
                     <label>
-                        <span data-i18n="pso_c1">Cognitive (c1)</span>: <span id="val-c1">1.5</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="pso_c1">Cognitive (c1)</span>
+                            <span class="label-value" id="val-c1">1.5</span>
+                        </span>
                         <input type="range" id="pso_c1" min="0" max="4" step="0.1" value="1.5"
                             oninput="document.getElementById('val-c1').innerText = this.value">
                     </label>
                     <label>
-                        <span data-i18n="pso_c2">Social (c2)</span>: <span id="val-c2">1.5</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="pso_c2">Social (c2)</span>
+                            <span class="label-value" id="val-c2">1.5</span>
+                        </span>
                         <input type="range" id="pso_c2" min="0" max="4" step="0.1" value="1.5"
                             oninput="document.getElementById('val-c2').innerText = this.value">
                     </label>
@@ -117,12 +176,18 @@
                 </div>
                 <div class="plot-controls" aria-label="AG plot controls">
                     <label>
-                        <span data-i18n="surface_opacity">Surface</span>: <span id="val-ag-surface">0.45</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="surface_opacity">Surface</span>
+                            <span class="label-value" id="val-ag-surface">0.45</span>
+                        </span>
                         <input type="range" id="ag_surface_opacity" min="0" max="1" step="0.05" value="0.45"
                             oninput="document.getElementById('val-ag-surface').innerText = this.value">
                     </label>
                     <label>
-                        <span data-i18n="point_size">Points</span>: <span id="val-ag-points">5</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="point_size">Points</span>
+                            <span class="label-value" id="val-ag-points">5</span>
+                        </span>
                         <input type="range" id="ag_point_size" min="2" max="10" step="0.5" value="5"
                             oninput="document.getElementById('val-ag-points').innerText = this.value">
                     </label>
@@ -146,12 +211,18 @@
                 </div>
                 <div class="plot-controls" aria-label="PSO plot controls">
                     <label>
-                        <span data-i18n="surface_opacity">Surface</span>: <span id="val-pso-surface">0.45</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="surface_opacity">Surface</span>
+                            <span class="label-value" id="val-pso-surface">0.45</span>
+                        </span>
                         <input type="range" id="pso_surface_opacity" min="0" max="1" step="0.05" value="0.45"
                             oninput="document.getElementById('val-pso-surface').innerText = this.value">
                     </label>
                     <label>
-                        <span data-i18n="point_size">Points</span>: <span id="val-pso-points">5</span>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="point_size">Points</span>
+                            <span class="label-value" id="val-pso-points">5</span>
+                        </span>
                         <input type="range" id="pso_point_size" min="2" max="10" step="0.5" value="5"
                             oninput="document.getElementById('val-pso-points').innerText = this.value">
                     </label>
@@ -176,6 +247,8 @@
         </section>
     </div>
     <div id="themeWipe" class="theme-wipe" aria-hidden="true"></div>
+    <script src="https://cdn.jsdelivr.net/npm/mathjs@11.11.0/lib/browser/math.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathlive@0.100.0/dist/mathlive.min.js"></script>
     <script src="/static/js/main.js"></script>
 </body>
 

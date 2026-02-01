@@ -3,25 +3,45 @@
 const agScoreEl = document.getElementById('ag-score');
 const psoScoreEl = document.getElementById('pso-score');
 const iterationEl = document.getElementById('iteration-display');
+const iterationValueEl = document.getElementById('iteration-value');
 const startBtn = document.getElementById('startBtn');
+const functionInputEl = document.getElementById('function_expr');
+const dimensionsInputEl = document.getElementById('dimensions');
+const functionErrorEl = document.getElementById('function-error');
+const fixedDimsGridEl = document.getElementById('fixed-dims-grid');
+const iterationSeekEl = document.getElementById('iteration_seek');
+const iterationSeekInputEl = document.getElementById('iteration_seek_input');
+const iterationSeekValueEl = document.getElementById('seek-value');
 
 let ws;
 let isRunning = false;
 let currentIteration = 0;
 let resizeTimer;
+let isSeeking = false;
 
-// --- Helper: Rastrigin Function for 3D Surface ---
-function rastrigin(x, y) {
-    const A = 10;
-    return 20 + (x ** 2 - A * Math.cos(2 * Math.PI * x)) + (y ** 2 - A * Math.cos(2 * Math.PI * y));
-}
+const historyCache = {
+    ag: [],
+    pso: []
+};
+
+const DEFAULT_EXPRESSION = '0.5 - ((sin(sqrt(x1^2 + x2^2))^2 - 0.5) / (1 + 0.001*(x1^2 + x2^2))^2)';
+const DEFAULT_DIMENSIONS = 2;
+let currentDimensions = DEFAULT_DIMENSIONS;
+let compiledExpression = null;
+let currentExpression = DEFAULT_EXPRESSION;
+
+const allowedFunctions = new Set([
+    'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+    'sinh', 'cosh', 'tanh', 'sqrt', 'abs', 'exp',
+    'log', 'log10', 'pi', 'e'
+]);
 
 // Generate Static Mesh for Plotly
 const size = 70;
 const step = 10.24 / (size - 1);
 const x_range = Array.from({ length: size }, (_, i) => -5.12 + step * i);
 const y_range = Array.from({ length: size }, (_, i) => -5.12 + step * i);
-const base_z_data = y_range.map(y => x_range.map(x => rastrigin(x, y)));
+let base_z_data = y_range.map(() => x_range.map(() => 0));
 
 const surfaceTrace = {
     z: base_z_data,
@@ -48,6 +68,10 @@ const translations = {
         settings: "Model Parameters & Settings",
         settings_note: "Tune population and dynamics",
         global: "Global",
+        function_label: "Function",
+        dimensions: "Dimensions",
+        fixed_values: "Fixed values (x3+)",
+        seek_iteration: "Seek",
         pop_size: "Population",
         delay: "Delay (ms)",
         optimization_mode: "Optimization",
@@ -68,6 +92,9 @@ const translations = {
         iteration_axis: "Iteration",
         fitness_axis: "Fitness",
         objective_axis: "Objective",
+        function_error_empty: "Expression is empty.",
+        function_error_dims: "Dimensions must be at least 2.",
+        function_error_symbol: "Unsupported symbol(s):",
         mode_min: "MIN",
         mode_max: "MAX",
         mode_target: "TARGET",
@@ -87,6 +114,10 @@ const translations = {
         settings: "Parâmetros do Modelo",
         settings_note: "Ajuste população e dinâmicas",
         global: "Global",
+        function_label: "Funcao",
+        dimensions: "Dimensoes",
+        fixed_values: "Valores fixos (x3+)",
+        seek_iteration: "Ir",
         pop_size: "População",
         delay: "Atraso (ms)",
         optimization_mode: "Otimização",
@@ -107,6 +138,9 @@ const translations = {
         iteration_axis: "Iteração",
         fitness_axis: "Fitness",
         objective_axis: "Objetivo",
+        function_error_empty: "A expressao esta vazia.",
+        function_error_dims: "A dimensao deve ser pelo menos 2.",
+        function_error_symbol: "Simbolo(s) nao suportado(s):",
         mode_min: "MIN",
         mode_max: "MAX",
         mode_target: "ALVO",
@@ -154,8 +188,11 @@ function updateLanguageUI() {
 }
 
 function updateIterationLabel() {
-    if (iterationEl) {
-        iterationEl.textContent = `${translations[currentLang].iteration}: ${currentIteration}`;
+    if (iterationValueEl) {
+        iterationValueEl.textContent = `${currentIteration}`;
+    }
+    if (iterationSeekValueEl) {
+        iterationSeekValueEl.textContent = `${currentIteration}`;
     }
 }
 
@@ -163,6 +200,146 @@ function updateStartBtnText() {
     const key = isRunning ? 'pause' : 'start';
     startBtn.textContent = translations[currentLang][key];
 }
+
+function normalizeExpression(expr) {
+    return expr
+    .replace(/[\u2217\u22C5\u00D7]/g, '*')
+    .replace(/[\u2212\u2012\u2013\u2014]/g, '-')
+        .replace(/\bln\b/g, 'log')
+        .replace(/x_\{?\s*(\d+)\s*\}?/g, 'x$1')
+        .trim();
+}
+
+function getExpressionValue() {
+    if (!functionInputEl) return '';
+    if (functionInputEl.tagName === 'MATH-FIELD' && typeof functionInputEl.getValue === 'function') {
+        return functionInputEl.getValue('ascii-math');
+    }
+    return functionInputEl.value || '';
+}
+
+function setExpressionValue(expr) {
+    if (!functionInputEl) return;
+    if (functionInputEl.tagName === 'MATH-FIELD' && typeof functionInputEl.setValue === 'function') {
+        functionInputEl.setValue(expr, { format: 'ascii-math' });
+        return;
+    }
+    functionInputEl.value = expr;
+}
+
+function validateExpression(expr, dims) {
+    if (!expr || !expr.trim()) {
+        throw new Error(translations[currentLang].function_error_empty || 'Expression is empty.');
+    }
+    if (!Number.isFinite(dims) || dims < 2) {
+        throw new Error(translations[currentLang].function_error_dims || 'Dimensions must be at least 2.');
+    }
+    if (typeof window.math === 'undefined') {
+        throw new Error('MathJS is not available.');
+    }
+
+    const node = window.math.parse(expr);
+    const symbols = new Set();
+    const functions = new Set();
+
+    node.traverse(child => {
+        if (child.isSymbolNode) {
+            symbols.add(child.name);
+        }
+        if (child.isFunctionNode && child.fn && child.fn.name) {
+            functions.add(child.fn.name);
+        }
+    });
+
+    const allowedVars = new Set(Array.from({ length: dims }, (_, i) => `x${i + 1}`));
+    const allowedConsts = new Set(['pi', 'e']);
+
+    const unknownFunctions = Array.from(functions).filter(name => !allowedFunctions.has(name));
+    const unknownSymbols = Array.from(symbols).filter(name => {
+        return !allowedVars.has(name) && !allowedConsts.has(name) && !allowedFunctions.has(name);
+    });
+
+    if (unknownFunctions.length || unknownSymbols.length) {
+        const allUnknown = [...new Set([...unknownFunctions, ...unknownSymbols])];
+        throw new Error(`${translations[currentLang].function_error_symbol || 'Unsupported symbol(s):'} ${allUnknown.join(', ')}`);
+    }
+}
+
+function buildScopeFromVector(vec, dims) {
+    const scope = { pi: Math.PI, e: Math.E };
+    for (let i = 0; i < dims; i += 1) {
+        scope[`x${i + 1}`] = vec[i] ?? 0;
+    }
+    return scope;
+}
+
+function getFixedDimensionValues() {
+    const values = [];
+    if (!fixedDimsGridEl) return values;
+    fixedDimsGridEl.querySelectorAll('input[data-dim]').forEach(input => {
+        const value = parseFloat(input.value);
+        values.push(Number.isFinite(value) ? value : 0);
+    });
+    return values;
+}
+
+function compileExpression() {
+    if (!functionInputEl || typeof window.math === 'undefined') return;
+
+    const rawExpr = getExpressionValue();
+    const dims = parseInt(dimensionsInputEl?.value, 10) || DEFAULT_DIMENSIONS;
+    const normalized = normalizeExpression(rawExpr);
+
+    try {
+        validateExpression(normalized, dims);
+        compiledExpression = window.math.compile(normalized);
+        currentExpression = normalized;
+        currentDimensions = dims;
+        if (functionErrorEl) functionErrorEl.textContent = '';
+        updateFixedDimensionInputs(dims);
+        updateSurfaceTraces();
+        resetSimulation();
+    } catch (err) {
+        compiledExpression = null;
+        if (functionErrorEl) functionErrorEl.textContent = err.message || 'Invalid expression.';
+    }
+}
+
+function evaluateExpressionVector(vec) {
+    if (!compiledExpression) return NaN;
+    try {
+        return compiledExpression.evaluate(buildScopeFromVector(vec, currentDimensions));
+    } catch (err) {
+        return NaN;
+    }
+}
+
+function evaluateExpressionAt(x1, x2) {
+    const fixedValues = getFixedDimensionValues();
+    const vec = [x1, x2, ...fixedValues];
+    return evaluateExpressionVector(vec);
+}
+
+function updateFixedDimensionInputs(dims) {
+    if (!fixedDimsGridEl) return;
+    fixedDimsGridEl.innerHTML = '';
+    if (dims <= 2) return;
+
+    for (let i = 3; i <= dims; i += 1) {
+        const label = document.createElement('label');
+        label.textContent = `x${i}`;
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.value = '0';
+        input.setAttribute('data-dim', String(i));
+        input.addEventListener('input', () => {
+            updateSurfaceTraces();
+        });
+        label.appendChild(input);
+        fixedDimsGridEl.appendChild(label);
+    }
+}
+
 
 // --- Plotly Init ---
 const layout3D = {
@@ -216,8 +393,13 @@ function applyObjectiveValue(rawValue) {
     return rawValue;
 }
 
+function safeValue(value) {
+    return Number.isFinite(value) ? value : 0;
+}
+
 function getSurfaceZ() {
-    return base_z_data.map(row => row.map(applyObjectiveValue));
+    if (!compiledExpression) return base_z_data;
+    return y_range.map(y => x_range.map(x => applyObjectiveValue(safeValue(evaluateExpressionAt(x, y)))));
 }
 
 function getModeLabel() {
@@ -327,6 +509,18 @@ function requestStep() {
 }
 
 function updateDashboard(data) {
+    if (data?.error && functionErrorEl) {
+        functionErrorEl.textContent = data.error;
+    }
+    if (data?.ag && Number.isFinite(data.ag.iteration)) {
+        historyCache.ag[data.ag.iteration] = data.ag.best_score;
+    }
+    if (data?.pso && Number.isFinite(data.pso.iteration)) {
+        historyCache.pso[data.pso.iteration] = data.pso.best_score;
+    }
+    if (data?.ag?.max_iteration !== undefined) {
+        updateSeekControls(data.ag.max_iteration, data.ag.iteration);
+    }
     const layoutUpdate = {
         scene: {
             camera: { eye: { x: 1.5, y: 1.5, z: 1.5 } } // Initial only, urevision handles rest
@@ -342,7 +536,7 @@ function updateDashboard(data) {
 
         const agX = data.ag.population.map(p => p[0]);
         const agY = data.ag.population.map(p => p[1]);
-        const agZ = data.ag.population.map(p => applyObjectiveValue(rastrigin(p[0], p[1])) + 1);
+        const agZ = data.ag.population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))) + 1);
 
         // Use Plotly.react for high-performance updates
         // We reuse the surface trace (index 0) and update scatter trace (index 1)
@@ -362,7 +556,7 @@ function updateDashboard(data) {
 
         const psoX = data.pso.population.map(p => p[0]);
         const psoY = data.pso.population.map(p => p[1]);
-        const psoZ = data.pso.population.map(p => applyObjectiveValue(rastrigin(p[0], p[1])) + 1);
+        const psoZ = data.pso.population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))) + 1);
 
         const psoData = [{ ...surfaceTrace, z: cachedSurfaceZ, opacity: getNumberValue('pso_surface_opacity', 0.45) }, {
             x: psoX, y: psoY, z: psoZ,
@@ -376,11 +570,8 @@ function updateDashboard(data) {
     }
 
     // Update Convergence Chart
-    if (data.ag && data.ag.iteration % 1 === 0) {
-        Plotly.extendTraces('convergencePlot', {
-            x: [[data.ag.iteration], [data.ag.iteration]],
-            y: [[data.ag.best_score], [data.pso.best_score]]
-        }, [0, 1]);
+    if (data.ag && data.pso) {
+        renderConvergence(data.ag.iteration);
     }
 }
 
@@ -393,10 +584,20 @@ function toggleSimulation() {
 
 function resetSimulation() {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!compiledExpression) {
+        compileExpression();
+    }
+    if (!compiledExpression) {
+        if (functionErrorEl) {
+            functionErrorEl.textContent = translations[currentLang].function_error_empty || 'Expression is empty.';
+        }
+        return;
+    }
     isRunning = false;
     updateStartBtnText();
     currentIteration = 0;
     updateIterationLabel();
+    resetHistoryCache();
 
     // Reset Plots
     Plotly.deleteTraces('convergencePlot', [0, 1]);
@@ -408,6 +609,8 @@ function resetSimulation() {
 
     const params = {
         action: "reset",
+        function_expr: currentExpression,
+        dimensions: currentDimensions,
         pop_size: parseInt(document.getElementById('pop_size').value),
         ag_mutation: parseFloat(document.getElementById('ag_mutation').value),
         ag_crossover: parseFloat(document.getElementById('ag_crossover').value),
@@ -418,6 +621,53 @@ function resetSimulation() {
         target_value: getTargetValue()
     };
     ws.send(JSON.stringify(params));
+}
+
+function requestSeek(iteration) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    isRunning = false;
+    updateStartBtnText();
+    ws.send(JSON.stringify({ action: "seek", iteration }));
+}
+
+function updateSeekControls(maxIteration, current) {
+    if (iterationSeekEl) {
+        iterationSeekEl.max = String(maxIteration);
+        if (!isSeeking) iterationSeekEl.value = String(current);
+    }
+    if (iterationSeekInputEl) {
+        iterationSeekInputEl.max = String(maxIteration);
+        if (!isSeeking) iterationSeekInputEl.value = String(current);
+    }
+}
+
+function resetHistoryCache() {
+    historyCache.ag = [];
+    historyCache.pso = [];
+    renderConvergence(0);
+}
+
+function renderConvergence(iteration) {
+    const seriesNames = getSeriesNames();
+    const xValues = [];
+    const agValues = [];
+    const psoValues = [];
+
+    for (let i = 0; i <= iteration; i += 1) {
+        if (historyCache.ag[i] === undefined || historyCache.pso[i] === undefined) continue;
+        xValues.push(i);
+        agValues.push(historyCache.ag[i]);
+        psoValues.push(historyCache.pso[i]);
+    }
+
+    try {
+        Plotly.react('convergencePlot', [
+            { x: xValues, y: agValues, mode: 'lines', name: seriesNames.ag, line: { color: '#0f766e' } },
+            { x: xValues, y: psoValues, mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } }
+        ], layoutConvergence, { responsive: true, displayModeBar: false });
+    } catch (e) {
+        console.log('Plotly not ready');
+    }
 }
 
 // --- Theme Management ---
@@ -564,6 +814,50 @@ function initOptimizationControls() {
     updateModeLabels();
 }
 
+function initSeekControls() {
+    if (iterationSeekEl) {
+        iterationSeekEl.addEventListener('input', () => {
+            isSeeking = true;
+            const value = parseInt(iterationSeekEl.value, 10) || 0;
+            if (iterationSeekValueEl) iterationSeekValueEl.textContent = String(value);
+            if (iterationSeekInputEl) iterationSeekInputEl.value = String(value);
+            requestSeek(value);
+        });
+        iterationSeekEl.addEventListener('change', () => {
+            isSeeking = false;
+        });
+    }
+
+    if (iterationSeekInputEl) {
+        iterationSeekInputEl.addEventListener('change', () => {
+            isSeeking = true;
+            const value = parseInt(iterationSeekInputEl.value, 10) || 0;
+            if (iterationSeekEl) iterationSeekEl.value = String(value);
+            if (iterationSeekValueEl) iterationSeekValueEl.textContent = String(value);
+            requestSeek(value);
+            isSeeking = false;
+        });
+    }
+}
+
+function initExpressionControls() {
+    if (functionInputEl) {
+        setExpressionValue(DEFAULT_EXPRESSION);
+        functionInputEl.addEventListener('input', compileExpression);
+        functionInputEl.addEventListener('change', compileExpression);
+        functionInputEl.addEventListener('keyup', compileExpression);
+    }
+    if (dimensionsInputEl) {
+        dimensionsInputEl.value = String(DEFAULT_DIMENSIONS);
+        const dimValueEl = document.getElementById('val-dimensions');
+        if (dimValueEl) dimValueEl.textContent = String(DEFAULT_DIMENSIONS);
+        dimensionsInputEl.addEventListener('input', compileExpression);
+        dimensionsInputEl.addEventListener('change', compileExpression);
+    }
+    updateFixedDimensionInputs(DEFAULT_DIMENSIONS);
+    compileExpression();
+}
+
 function updatePlotLanguage() {
     const iterationLabel = translations[currentLang].iteration_axis || 'Iteration';
     const seriesNames = getSeriesNames();
@@ -602,9 +896,11 @@ function resizePlots() {
 // --- Init ---
 window.onload = () => {
     initLanguage();
+    initExpressionControls();
     initPlots();
     initTheme();
     initOptimizationControls();
+    initSeekControls();
     connectWebSocket();
     initPlotControls();
     window.addEventListener('resize', resizePlots);

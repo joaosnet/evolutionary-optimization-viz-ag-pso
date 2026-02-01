@@ -30,6 +30,7 @@ class GeneticAlgorithm(OptimizationAlgorithm):
             self.bounds[:, 0], self.bounds[:, 1], (self.pop_size, self.dim)
         )
         self.update_best()
+        self.record_state()
 
     def update_best(self):
         raw_scores = self.func(self.population)
@@ -69,6 +70,7 @@ class GeneticAlgorithm(OptimizationAlgorithm):
         self.mutation()
 
         self.update_best()
+        self.record_state()
 
     def tournament_selection(self, scores, k=3):
         selected = []
