@@ -103,7 +103,8 @@ const translations = {
         convergence_threshold: "Threshold",
         convergence_window: "Window (iters)",
         converged_msg: "Converged!",
-        continue: "Continue"
+        continue: "Continue",
+        generate_report: "Report"
     },
     pt: {
         eyebrow: "Otimização ao Vivo",
@@ -154,7 +155,8 @@ const translations = {
         convergence_threshold: "Limiar",
         convergence_window: "Janela (iters)",
         converged_msg: "Convergiu!",
-        continue: "Continuar"
+        continue: "Continuar",
+        generate_report: "Relatório"
     }
 };
 
@@ -986,5 +988,119 @@ window.onload = () => {
     initOptimizationControls();
     connectWebSocket();
     initPlotControls();
+    initReportButton();
     window.addEventListener('resize', resizePlots);
 };
+
+// --- Report Generation (Hidden Feature) ---
+let titleClickCount = 0;
+let titleClickTimer = null;
+
+function generateReport() {
+    const reportBtn = document.getElementById('reportBtn');
+    if (reportBtn) {
+        reportBtn.disabled = true;
+        reportBtn.textContent = '⏳';
+    }
+
+    const data = {
+        params: {
+            pop_size: parseInt(document.getElementById('pop_size')?.value) || 50,
+            ag_mutation: parseFloat(document.getElementById('ag_mutation')?.value) || 0.01,
+            ag_crossover: parseFloat(document.getElementById('ag_crossover')?.value) || 0.7,
+            pso_w: parseFloat(document.getElementById('pso_w')?.value) || 0.5,
+            pso_c1: parseFloat(document.getElementById('pso_c1')?.value) || 1.5,
+            pso_c2: parseFloat(document.getElementById('pso_c2')?.value) || 1.5,
+            optimization_mode: getOptimizationMode(),
+            target_value: getTargetValue(),
+            function_expr: currentExpression,
+            dimensions: currentDimensions
+        },
+        ag: {
+            best_score: historyCache.ag.length > 0 ? historyCache.ag[historyCache.ag.length - 1] : null,
+            iteration: currentIteration
+        },
+        pso: {
+            best_score: historyCache.pso.length > 0 ? historyCache.pso[historyCache.pso.length - 1] : null,
+            iteration: currentIteration
+        },
+        history_ag: historyCache.ag.filter(v => v !== undefined),
+        history_pso: historyCache.pso.filter(v => v !== undefined)
+    };
+
+    fetch('/api/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+        .then(response => {
+            const contentType = response.headers.get('content-type');
+            const filename = contentType?.includes('pdf')
+                ? 'relatorio_ag_pso.pdf'
+                : 'relatorio_ag_pso.tex';
+
+            return response.blob().then(blob => ({ blob, filename }));
+        })
+        .then(({ blob, filename }) => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        })
+        .catch(err => {
+            console.error('Report generation failed:', err);
+            if (functionErrorEl) {
+                functionErrorEl.textContent = 'Report generation failed';
+            }
+        })
+        .finally(() => {
+            if (reportBtn) {
+                reportBtn.disabled = false;
+                reportBtn.innerHTML = '📄 <span data-i18n="generate_report">' +
+                    (translations[currentLang]?.generate_report || 'Report') + '</span>';
+            }
+        });
+}
+
+function revealReportButton() {
+    const reportBtn = document.getElementById('reportBtn');
+    if (reportBtn) {
+        reportBtn.classList.remove('hidden');
+        reportBtn.classList.add('revealed');
+    }
+}
+
+function initReportButton() {
+    const mainTitle = document.getElementById('mainTitle');
+
+    // Triple-click on title to reveal button
+    if (mainTitle) {
+        mainTitle.addEventListener('click', () => {
+            titleClickCount++;
+
+            if (titleClickTimer) clearTimeout(titleClickTimer);
+
+            titleClickTimer = setTimeout(() => {
+                titleClickCount = 0;
+            }, 500);
+
+            if (titleClickCount >= 3) {
+                revealReportButton();
+                titleClickCount = 0;
+            }
+        });
+    }
+
+    // Ctrl+Shift+R keybind
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+            e.preventDefault();
+            revealReportButton();
+            generateReport();
+        }
+    });
+}

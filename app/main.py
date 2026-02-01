@@ -1,9 +1,12 @@
 from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel
+from typing import Optional
 from app.algorithms.ag import GeneticAlgorithm
 from app.algorithms.pso import ParticleSwarmOptimization
 from app.algorithms.base import rastrigin, build_expression_function
+from app.report import generate_latex, compile_to_pdf
 import json
 import os
 
@@ -17,6 +20,71 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 @app.get("/")
 async def read_index():
     return FileResponse(os.path.join(os.getcwd(), "templates", "index.html"))
+
+
+class ReportParams(BaseModel):
+    pop_size: int = 50
+    ag_mutation: float = 0.01
+    ag_crossover: float = 0.7
+    pso_w: float = 0.5
+    pso_c1: float = 1.5
+    pso_c2: float = 1.5
+    optimization_mode: str = "max"
+    target_value: float = 0.0
+    function_expr: str = ""
+    dimensions: int = 2
+
+
+class ReportAG(BaseModel):
+    best_score: Optional[float] = None
+    iteration: int = 0
+
+
+class ReportPSO(BaseModel):
+    best_score: Optional[float] = None
+    iteration: int = 0
+
+
+class ReportRequest(BaseModel):
+    params: ReportParams = ReportParams()
+    ag: ReportAG = ReportAG()
+    pso: ReportPSO = ReportPSO()
+    history_ag: list = []
+    history_pso: list = []
+
+
+@app.post("/api/generate-report")
+async def generate_report(request: ReportRequest):
+    """
+    Gera relatório LaTeX/PDF a partir dos dados da simulação.
+    Retorna PDF se LaTeX estiver disponível, caso contrário retorna .tex
+    """
+    data = request.model_dump()
+
+    # Gerar LaTeX
+    tex_content = generate_latex(data)
+
+    # Tentar compilar para PDF
+    pdf_bytes, message = compile_to_pdf(tex_content)
+
+    if pdf_bytes:
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": "attachment; filename=relatorio_ag_pso.pdf"
+            },
+        )
+    else:
+        # Retornar arquivo .tex se compilação falhou
+        return Response(
+            content=tex_content.encode("utf-8"),
+            media_type="application/x-tex",
+            headers={
+                "Content-Disposition": "attachment; filename=relatorio_ag_pso.tex",
+                "X-Report-Message": message,
+            },
+        )
 
 
 @app.websocket("/ws/simulation")
