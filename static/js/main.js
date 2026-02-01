@@ -1253,6 +1253,11 @@ function generatePdfReport() {
         cursorY -= 2; // tight
         addFullWidthText('na Otimização de Funções Multimodais', 14, 'bold', 'center');
 
+        cursorY += 4;
+        addFullWidthText('João da Cruz de Natividade e Silva Neto', 12, 'normal', 'center');
+        cursorY -= 4;
+        addFullWidthText('UFPA -- Universidade Federal do Pará', 10, 'italic', 'center');
+
         cursorY += 2;
         doc.setLineWidth(0.5);
         doc.line(marginLeft, cursorY, marginLeft + contentWidth, cursorY);

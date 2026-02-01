@@ -701,7 +701,7 @@ def compile_to_pdf(tex_content: str) -> tuple[Optional[bytes], str]:
             )
 
             # Terceira passagem (para garantir TOC correto)
-            result = subprocess.run(
+            subprocess.run(
                 cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120
             )
 
@@ -709,7 +709,7 @@ def compile_to_pdf(tex_content: str) -> tuple[Optional[bytes], str]:
                 pdf_bytes = pdf_path.read_bytes()
                 return pdf_bytes, f"PDF gerado com sucesso usando {compiler}"
             else:
-                return None, f"Falha na compilação: verificar log para detalhes"
+                return None, "Falha na compilação: verificar log para detalhes"
 
         except subprocess.TimeoutExpired:
             return None, "Timeout na compilação do LaTeX"
