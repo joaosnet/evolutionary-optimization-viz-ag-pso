@@ -640,6 +640,17 @@ Conclusões principais:
 \end{itemize}
 
 %==============================================================================
+\section{Disponibilidade}
+%==============================================================================
+
+O código fonte e a versão interativa desta simulação estão disponíveis em:
+
+\begin{itemize}
+    \item \textbf{Código Fonte}: \url{https://github.com/seu-usuario/evolutionary-optimization-viz-ag-pso}
+    \item \textbf{Demonstração}: \url{https://evolutionary-optimization-viz.example.com}
+\end{itemize}
+
+%==============================================================================
 \section*{Informações}
 %==============================================================================
 

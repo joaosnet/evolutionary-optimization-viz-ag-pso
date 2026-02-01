@@ -13,6 +13,8 @@
 ## 🇺🇸 English
 
 > Interactive visualization comparing Genetic Algorithms (Real-Coded) and PSO on the Rastrigin function.
+>
+> **Live Demo:** [https://evolutionary-optimization-viz.example.com](https://evolutionary-optimization-viz.example.com)
 
 ### 📸 Screenshots
 
@@ -66,6 +68,8 @@ $f(x) = 10n + \sum[x_i^2 - 10 \cdot \cos(2\pi x_i)]$
 ## 🇧🇷 Português Brasileiro
 
 > Visualização interativa comparando Algoritmos Genéticos (Real-Coded) e PSO na função Rastrigin.
+>
+> **Demonstração Online:** [https://evolutionary-optimization-viz.example.com](https://evolutionary-optimization-viz.example.com)
 
 ### 📸 Screenshots
 
