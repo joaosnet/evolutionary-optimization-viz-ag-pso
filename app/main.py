@@ -27,11 +27,25 @@ async def websocket_endpoint(websocket: WebSocket):
     bounds = [[-5.12, 5.12], [-5.12, 5.12]]  # Rastrigin bounds
     pop_size = 50
     dims = 2
+    optimization_mode = "max"
+    target_value = 0.0
 
     # Initialize Algorithms
-    ag = GeneticAlgorithm(rastrigin, bounds, population_size=pop_size, dimensions=dims)
+    ag = GeneticAlgorithm(
+        rastrigin,
+        bounds,
+        population_size=pop_size,
+        dimensions=dims,
+        optimization_mode=optimization_mode,
+        target_value=target_value,
+    )
     pso = ParticleSwarmOptimization(
-        rastrigin, bounds, population_size=pop_size, dimensions=dims
+        rastrigin,
+        bounds,
+        population_size=pop_size,
+        dimensions=dims,
+        optimization_mode=optimization_mode,
+        target_value=target_value,
     )
 
     try:
@@ -61,6 +75,8 @@ async def websocket_endpoint(websocket: WebSocket):
             elif action == "reset":
                 # Extract params or use defaults
                 pop_size = data.get("pop_size", 50)
+                optimization_mode = data.get("optimization_mode", "max")
+                target_value = data.get("target_value", 0.0)
 
                 # AG Params
                 ag_mut = data.get("ag_mutation", 0.01)
@@ -78,6 +94,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     dimensions=dims,
                     mutation_rate=ag_mut,
                     crossover_rate=ag_cross,
+                    optimization_mode=optimization_mode,
+                    target_value=target_value,
                 )
                 pso = ParticleSwarmOptimization(
                     rastrigin,
@@ -87,6 +105,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     w=pso_w,
                     c1=pso_c1,
                     c2=pso_c2,
+                    optimization_mode=optimization_mode,
+                    target_value=target_value,
                 )
                 response = {"ag": ag.get_state(), "pso": pso.get_state()}
                 await websocket.send_json(response)

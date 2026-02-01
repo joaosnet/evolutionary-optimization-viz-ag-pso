@@ -11,8 +11,17 @@ class GeneticAlgorithm(OptimizationAlgorithm):
         dimensions=2,
         mutation_rate=0.01,
         crossover_rate=0.7,
+        optimization_mode="max",
+        target_value=0.0,
     ):
-        super().__init__(func, bounds, population_size, dimensions)
+        super().__init__(
+            func,
+            bounds,
+            population_size,
+            dimensions,
+            optimization_mode=optimization_mode,
+            target_value=target_value,
+        )
         self.mutation_rate = mutation_rate
         self.crossover_rate = crossover_rate
 
@@ -23,12 +32,16 @@ class GeneticAlgorithm(OptimizationAlgorithm):
         self.update_best()
 
     def update_best(self):
-        scores = self.func(self.population)
-        min_idx = np.argmin(scores)
-        if scores[min_idx] < self.best_score:
-            self.best_score = scores[min_idx]
-            self.best_solution = self.population[min_idx].copy()
-        return scores
+        raw_scores = self.func(self.population)
+        objective_scores = self.objective_scores(raw_scores)
+        best_idx = self.best_index(objective_scores)
+        if self.is_better(objective_scores[best_idx], self.best_objective):
+            self.best_objective = objective_scores[best_idx]
+            self.best_score = self.display_score(
+                raw_scores[best_idx], objective_scores[best_idx]
+            )
+            self.best_solution = self.population[best_idx].copy()
+        return objective_scores
 
     def step(self):
         self.iteration += 1
@@ -61,7 +74,8 @@ class GeneticAlgorithm(OptimizationAlgorithm):
         selected = []
         for _ in range(self.pop_size):
             candidates_idx = np.random.randint(0, self.pop_size, k)
-            best_candidate_idx = candidates_idx[np.argmin(scores[candidates_idx])]
+            candidate_scores = scores[candidates_idx]
+            best_candidate_idx = candidates_idx[self.best_index(candidate_scores)]
             selected.append(self.population[best_candidate_idx])
         return np.array(selected)
 

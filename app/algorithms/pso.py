@@ -4,9 +4,25 @@ from .base import OptimizationAlgorithm
 
 class ParticleSwarmOptimization(OptimizationAlgorithm):
     def __init__(
-        self, func, bounds, population_size=50, dimensions=2, w=0.5, c1=1.5, c2=1.5
+        self,
+        func,
+        bounds,
+        population_size=50,
+        dimensions=2,
+        w=0.5,
+        c1=1.5,
+        c2=1.5,
+        optimization_mode="max",
+        target_value=0.0,
     ):
-        super().__init__(func, bounds, population_size, dimensions)
+        super().__init__(
+            func,
+            bounds,
+            population_size,
+            dimensions,
+            optimization_mode=optimization_mode,
+            target_value=target_value,
+        )
         self.w = w  # Inertia weight
         self.c1 = c1  # Cognitive (personal best) weight
         self.c2 = c2  # Social (global best) weight
@@ -19,26 +35,27 @@ class ParticleSwarmOptimization(OptimizationAlgorithm):
 
         # PBest (Personal Best)
         self.pbest = self.population.copy()
-        self.pbest_scores = np.full(self.pop_size, float("inf"))
+        self.pbest_scores = np.full(self.pop_size, self._initial_best_objective())
 
         self.update_best()
 
     def update_best(self):
-        scores = self.func(self.population)
+        raw_scores = self.func(self.population)
+        objective_scores = self.objective_scores(raw_scores)
 
         # Update Personal Bests
-        improved_mask = scores < self.pbest_scores
+        improved_mask = self.better_mask(objective_scores, self.pbest_scores)
         self.pbest[improved_mask] = self.population[improved_mask]
-        self.pbest_scores[improved_mask] = scores[improved_mask]
+        self.pbest_scores[improved_mask] = objective_scores[improved_mask]
 
         # Update Global Best
-        min_idx = np.argmin(scores)
-        print(
-            f"PSO Debug: Best Score Current={self.best_score}, Min Step Score={scores[min_idx]}"
-        )
-        if scores[min_idx] < self.best_score:
-            self.best_score = scores[min_idx]
-            self.best_solution = self.population[min_idx].copy()
+        best_idx = self.best_index(objective_scores)
+        if self.is_better(objective_scores[best_idx], self.best_objective):
+            self.best_objective = objective_scores[best_idx]
+            self.best_score = self.display_score(
+                raw_scores[best_idx], objective_scores[best_idx]
+            )
+            self.best_solution = self.population[best_idx].copy()
 
     def step(self):
         self.iteration += 1

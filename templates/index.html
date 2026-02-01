@@ -7,24 +7,41 @@
     <title>AG vs PSO - Optimization Dashboard</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
     <div class="dashboard-container">
-        <div class="header-content">
-            <h1 data-i18n="title">Optimization Showdown</h1>
-            <div class="controls-main">
-                <button id="langToggle" title="Toggle Language">🇺🇸 EN</button>
-                <button id="themeToggle" title="Toggle Dark/Light Mode">🌙</button>
-                <button id="startBtn" onclick="toggleSimulation()" data-i18n="start">Start</button>
-                <button id="resetBtn" onclick="resetSimulation()" data-i18n="reset">Reset</button>
-                <span id="iteration-display" data-i18n="iteration">Iteration: 0</span>
+        <header class="dashboard-header">
+            <div class="title-stack">
+                <p class="eyebrow" data-i18n="eyebrow">Live Optimization</p>
+                <h1 data-i18n="title">Optimization Showdown</h1>
+                <p class="subtitle" data-i18n="subtitle">AG vs PSO on Rastrigin Surface</p>
             </div>
-        </div>
+            <div class="controls-main" aria-label="Dashboard controls">
+                <div class="control-group">
+                    <button id="langToggle" class="toggle-btn" title="Toggle Language" aria-label="Toggle language">
+                        <span class="toggle-icon">🌐</span>
+                        <span class="toggle-text">EN</span>
+                    </button>
+                    <button id="themeToggle" class="toggle-btn" title="Toggle Dark/Light Mode" aria-label="Toggle theme">
+                        <span class="toggle-icon">🌙</span>
+                        <span class="toggle-text" data-i18n="theme_label">Theme</span>
+                    </button>
+                </div>
+                <div class="control-group">
+                    <button id="startBtn" class="primary-btn" onclick="toggleSimulation()" data-i18n="start">Start</button>
+                    <button id="resetBtn" class="ghost-btn" onclick="resetSimulation()" data-i18n="reset">Reset</button>
+                    <span id="iteration-display" class="iteration-pill" data-i18n="iteration" aria-live="polite">Iteration: 0</span>
+                </div>
+            </div>
+        </header>
 
         <details class="settings-panel">
-            <summary data-i18n="settings">Model Parameters & Settings</summary>
+            <summary>
+                <span data-i18n="settings">Model Parameters & Settings</span>
+                <span class="summary-note" data-i18n="settings_note">Tune population and dynamics</span>
+            </summary>
             <div class="settings-grid">
                 <!-- Global Settings -->
                 <div class="setting-group">
@@ -38,6 +55,19 @@
                         <span data-i18n="delay">Delay (ms)</span>: <span id="val-delay">0</span>
                         <input type="range" id="sim_delay" min="0" max="1000" step="50" value="0"
                             oninput="document.getElementById('val-delay').innerText = this.value">
+                    </label>
+                    <label>
+                        <span data-i18n="optimization_mode">Optimization</span>
+                        <select id="optimization_mode">
+                            <option value="max" data-i18n="maximize">Maximize</option>
+                            <option value="min" data-i18n="minimize">Minimize</option>
+                            <option value="target" data-i18n="target_mode">Target</option>
+                        </select>
+                    </label>
+                    <label class="target-field">
+                        <span data-i18n="target_value">Target</span>: <span id="val-target">0</span>
+                        <input type="number" id="optimization_target" value="0" step="0.1"
+                            oninput="document.getElementById('val-target').innerText = this.value">
                     </label>
                 </div>
 
@@ -85,12 +115,24 @@
                     <h2 data-i18n="ag_title">Genetic Algorithm</h2>
                     <span class="badge ag-badge">AG</span>
                 </div>
+                <div class="plot-controls" aria-label="AG plot controls">
+                    <label>
+                        <span data-i18n="surface_opacity">Surface</span>: <span id="val-ag-surface">0.45</span>
+                        <input type="range" id="ag_surface_opacity" min="0" max="1" step="0.05" value="0.45"
+                            oninput="document.getElementById('val-ag-surface').innerText = this.value">
+                    </label>
+                    <label>
+                        <span data-i18n="point_size">Points</span>: <span id="val-ag-points">5</span>
+                        <input type="range" id="ag_point_size" min="2" max="10" step="0.5" value="5"
+                            oninput="document.getElementById('val-ag-points').innerText = this.value">
+                    </label>
+                </div>
                 <div class="canvas-container">
                     <div id="agPlot" style="width:100%; height:100%;"></div>
                 </div>
                 <div class="stats">
                     <div class="stat-item">
-                        <span class="label" data-i18n="best_score">Best Score</span>
+                        <span class="label"><span data-i18n="best_value">Best Value</span> <span class="mode-tag best-mode-label">MAX</span></span>
                         <span class="value" id="ag-score">Inf</span>
                     </div>
                 </div>
@@ -102,12 +144,24 @@
                     <h2 data-i18n="pso_title">Particle Swarm</h2>
                     <span class="badge pso-badge">PSO</span>
                 </div>
+                <div class="plot-controls" aria-label="PSO plot controls">
+                    <label>
+                        <span data-i18n="surface_opacity">Surface</span>: <span id="val-pso-surface">0.45</span>
+                        <input type="range" id="pso_surface_opacity" min="0" max="1" step="0.05" value="0.45"
+                            oninput="document.getElementById('val-pso-surface').innerText = this.value">
+                    </label>
+                    <label>
+                        <span data-i18n="point_size">Points</span>: <span id="val-pso-points">5</span>
+                        <input type="range" id="pso_point_size" min="2" max="10" step="0.5" value="5"
+                            oninput="document.getElementById('val-pso-points').innerText = this.value">
+                    </label>
+                </div>
                 <div class="canvas-container">
                     <div id="psoPlot" style="width:100%; height:100%;"></div>
                 </div>
                 <div class="stats">
                     <div class="stat-item">
-                        <span class="label" data-i18n="best_score">Best Score</span>
+                        <span class="label"><span data-i18n="best_value">Best Value</span> <span class="mode-tag best-mode-label">MAX</span></span>
                         <span class="value" id="pso-score">Inf</span>
                     </div>
                 </div>
@@ -121,6 +175,7 @@
             </div>
         </section>
     </div>
+    <div id="themeWipe" class="theme-wipe" aria-hidden="true"></div>
     <script src="/static/js/main.js"></script>
 </body>
 
