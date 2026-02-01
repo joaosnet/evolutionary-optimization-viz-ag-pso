@@ -1,57 +1,121 @@
-# 🧬 AG vs PSO - Otimização Evolutiva
+# 🧬 AG vs PSO - Evolutionary Optimization / Otimização Evolutiva
 
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
+![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?logo=fastapi)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Status](https://img.shields.io/badge/Status-Completo-brightgreen)
+
+[🇺🇸 English](#english) | [🇧🇷 Português Brasileiro](#português-brasileiro)
+
+---
+
+<a name="english"></a>
+## 🇺🇸 English
+
+> Interactive visualization comparing Genetic Algorithms (Real-Coded) and PSO on the Rastrigin function.
+
+### 📸 Screenshots
+
+![Simulation](screenshot-simulation.png)
+
+### 🚀 Installation & Running
+
+This project uses a **Python/FastAPI** backend for simulation logic and a **React** frontend.
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/seu-usuario/evolutionary-optimization-viz-ag-pso.git
+    cd evolutionary-optimization-viz-ag-pso
+    ```
+
+2.  **Install dependencies and run (using `uv`):**
+    ```bash
+    # Sync dependencies
+    uv sync
+
+    # Run the server
+    uv run uvicorn app.main:app --reload
+    ```
+    *Alternatively, using standard pip:*
+    ```bash
+    pip install -r requirements.txt  # (If requirements.txt exists)
+    # OR manually: pip install fastapi uvicorn numpy websockets
+    python -m uvicorn app.main:app --reload
+    ```
+
+3.  **Open the application:**
+    Open your browser at `http://localhost:8000`.
+
+### dart Features
+
+- ✅ **2D Visualization**: Interactive heatmap of the Rastrigin function.
+- ✅ **Real-Coded GA**: BLX-α crossover, Gaussian mutation, Tournament selection.
+- ✅ **PSO**: Particle Swarm with adaptive inertia.
+- ✅ **Real-time Convergence**: Live graphing of population/swarm fitness.
+- ✅ **SBC Reports**: Generate PDF reports in the Brazilian Computer Society format.
+- ✅ **Interactive Controls**: Tweak hyperparameters on the fly.
+
+### 📚 Theory (Brief)
+
+**Rastrigin Function**:
+$f(x) = 10n + \sum[x_i^2 - 10 \cdot \cos(2\pi x_i)]$
+
+---
+
+<a name="português-brasileiro"></a>
+## 🇧🇷 Português Brasileiro
 
 > Visualização interativa comparando Algoritmos Genéticos (Real-Coded) e PSO na função Rastrigin.
 
-## 📸 Screenshots
+### 📸 Screenshots
 
 ![Simulação](screenshot-simulation.png)
 
-## 🚀 Instalação
+### 🚀 Instalação e Execução
 
-```bash
-# Clone o repositório
-git clone https://github.com/seu-usuario/evolutionary-optimization-viz-ag-pso.git
+Este projeto utiliza um backend **Python/FastAPI** para a lógica de simulação e um frontend **React**.
 
-# Abra o arquivo
-open index.html
-```
+1.  **Clone o repositório:**
+    ```bash
+    git clone https://github.com/seu-usuario/evolutionary-optimization-viz-ag-pso.git
+    cd evolutionary-optimization-viz-ag-pso
+    ```
 
-**Não requer instalação!** Basta abrir `index.html` no navegador.
+2.  **Instale as dependências e execute (usando `uv`):**
+    ```bash
+    # Sincronizar dependências
+    uv sync
 
-## 🎯 Funcionalidades
+    # Rodar o servidor
+    uv run uvicorn app.main:app --reload
+    ```
+    *Alternativamente, usando pip padrão:*
+    ```bash
+    pip install -r requirements.txt # (Se houver arquivo requirements)
+    # OU manualmente: pip install fastapi uvicorn numpy websockets
+    python -m uvicorn app.main:app --reload
+    ```
 
-- ✅ Visualização 2D da função Rastrigin
-- ✅ AG com representação real (BLX-α crossover)
-- ✅ PSO com velocidade adaptativa
-- ✅ Gráfico de convergência em tempo real
-- ✅ Controles de hiperparâmetros
-- ✅ Slides de apresentação integrados
-- ✅ Relatório LaTeX (formato SBC)
+3.  **Abra a aplicação:**
+    Acesse no seu navegador: `http://localhost:8000`.
 
-## 📚 Teoria
+### 🎯 Funcionalidades
 
-### Função Rastrigin
-```
-f(x) = 10n + Σ[xᵢ² - 10·cos(2πxᵢ)]
-```
+- ✅ **Visualização 2D**: Mapa de calor interativo da função Rastrigin.
+- ✅ **AG com representação real**: Crossover BLX-α, Mutação Gaussiana, Torneio.
+- ✅ **PSO**: Velocidade adaptativa com componentes cognitivo e social.
+- ✅ **Gráfico de Convergência**: Acompanhamento em tempo real.
+- ✅ **Relatórios SBC**: Geração de relatórios PDF no formato da Sociedade Brasileira de Computação.
+- ✅ **Controles Interativos**: Ajuste de hiperparâmetros em tempo de execução.
 
-### AG (Real-Coded)
-- Seleção por torneio
-- Crossover BLX-α
-- Mutação Gaussiana
+### 📚 Teoria (Resumo)
 
-### PSO
-- Inércia adaptativa
-- Componentes cognitivo e social
-
-## 📄 Licença
-MIT License
+**Função Rastrigin**:
+$f(x) = 10n + \sum[x_i^2 - 10 \cdot \cos(2\pi x_i)]$
 
 ---
-**Topics**: `evolutionary-computing` `genetic-algorithm` `particle-swarm-optimization` `pso` `react` `dataviz` `interactive-simulation` `rastrigin` `optimization`
 
-**About**: Visualização interativa comparando Algoritmos Genéticos e PSO para otimização da função Rastrigin. Inclui simulação em tempo real, slides e relatório LaTeX. 🧬🚀
+## 📄 Licença / License
+MIT License
+
+**Topics**: `evolutionary-computing` `genetic-algorithm` `particle-swarm-optimization` `pso` `react` `dataviz` `interactive-simulation` `rastrigin` `optimization`
