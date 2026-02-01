@@ -1430,6 +1430,13 @@ function generatePdfReport() {
         addBullet('PSO: velocidade inicial.');
         addBullet('AG: robustez a longo prazo.');
 
+        // 7. Disponibilidade
+        addSectionHeading('7. Disponibilidade');
+        addText('A simulação interativa está disponível em:');
+        doc.setTextColor(0, 0, 255);
+        addText('https://joaosnet.github.io/\nevolutionary-optimization-viz-ag-pso/', 9, 'normal');
+        doc.setTextColor(0, 0, 0);
+
         // Info
         cursorY += 5;
         doc.setFontSize(8);

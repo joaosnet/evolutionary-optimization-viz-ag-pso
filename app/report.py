@@ -646,8 +646,8 @@ Conclusões principais:
 O código fonte e a versão interativa desta simulação estão disponíveis em:
 
 \begin{itemize}
-    \item \textbf{Código Fonte}: \url{https://github.com/seu-usuario/evolutionary-optimization-viz-ag-pso}
-    \item \textbf{Demonstração}: \url{https://evolutionary-optimization-viz.example.com}
+    \item \textbf{Projeto}: \url{https://joaosnet.github.io/evolutionary-optimization-viz-ag-pso/}
+    \item \textbf{Repositório}: \url{https://github.com/joaosnet/evolutionary-optimization-viz-ag-pso}
 \end{itemize}
 
 %==============================================================================
