@@ -175,12 +175,12 @@ function toggleLanguage() {
 }
 
 function updateLanguageUI() {
+    // Set data-lang on document root for CSS-based toggle styling
+    document.documentElement.setAttribute('data-lang', currentLang);
+
     const langBtn = document.getElementById('langToggle');
     if (langBtn) {
-        const langText = langBtn.querySelector('.toggle-text');
-        const nextLang = currentLang === 'en' ? 'PT' : 'EN';
-        if (langText) langText.textContent = nextLang;
-        langBtn.setAttribute('data-lang', currentLang);
+        langBtn.setAttribute('aria-checked', currentLang === 'pt' ? 'true' : 'false');
     }
 
     document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -197,9 +197,6 @@ function updateLanguageUI() {
 function updateIterationLabel() {
     if (iterationValueEl) {
         iterationValueEl.textContent = `${currentIteration}`;
-    }
-    if (iterationSeekValueEl) {
-        iterationSeekValueEl.textContent = `${currentIteration}`;
     }
 }
 
@@ -557,7 +554,7 @@ function updateDashboard(data) {
 
         const agX = data.ag.population.map(p => p[0]);
         const agY = data.ag.population.map(p => p[1]);
-        const agZ = data.ag.population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))) + 1);
+        const agZ = data.ag.population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))));
 
         // Use Plotly.react for high-performance updates
         // We reuse the surface trace (index 0) and update scatter trace (index 1)
@@ -577,7 +574,7 @@ function updateDashboard(data) {
 
         const psoX = data.pso.population.map(p => p[0]);
         const psoY = data.pso.population.map(p => p[1]);
-        const psoZ = data.pso.population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))) + 1);
+        const psoZ = data.pso.population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))));
 
         const psoData = [{ ...surfaceTrace, z: cachedSurfaceZ, opacity: getNumberValue('pso_surface_opacity', 0.45) }, {
             x: psoX, y: psoY, z: psoZ,
@@ -772,7 +769,7 @@ const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)
 function initTheme() {
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
-    updateThemeIcon(savedTheme);
+    updateThemeToggleState(savedTheme);
     updatePlotColors(savedTheme);
 }
 
@@ -791,7 +788,7 @@ function toggleTheme(event) {
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
-    updateThemeIcon(theme);
+    updateThemeToggleState(theme);
     updatePlotColors(theme);
 }
 
@@ -816,10 +813,10 @@ function runThemeWipe(event, nextTheme) {
     window.setTimeout(() => themeWipe.classList.remove('is-active'), 720);
 }
 
-function updateThemeIcon(theme) {
+function updateThemeToggleState(theme) {
     if (!themeToggleBtn) return;
-    const icon = themeToggleBtn.querySelector('.toggle-icon');
-    if (icon) icon.textContent = theme === 'light' ? '🌙' : '☀️';
+    // Update aria-checked for accessibility
+    themeToggleBtn.setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
 }
 
 function updatePlotColors(theme) {
@@ -848,8 +845,26 @@ function updatePlotColors(theme) {
     } catch (e) { console.log("Plotly not ready"); }
 }
 
-if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleTheme);
-if (langToggleBtn) langToggleBtn.addEventListener('click', toggleLanguage);
+if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', toggleTheme);
+    // Keyboard support for the toggle (Enter/Space)
+    themeToggleBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleTheme(e);
+        }
+    });
+}
+if (langToggleBtn) {
+    langToggleBtn.addEventListener('click', toggleLanguage);
+    // Keyboard support for the toggle (Enter/Space)
+    langToggleBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleLanguage();
+        }
+    });
+}
 
 function updatePlotControls() {
     const agSurfaceOpacity = getNumberValue('ag_surface_opacity', 0.45);

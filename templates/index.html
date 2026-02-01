@@ -23,15 +23,52 @@
             </div>
             <div class="controls-main" aria-label="Dashboard controls">
                 <div class="control-group">
-                    <button id="langToggle" class="toggle-btn" title="Toggle Language" aria-label="Toggle language">
-                        <span class="toggle-icon">🌐</span>
-                        <span class="toggle-text">EN</span>
-                    </button>
-                    <button id="themeToggle" class="toggle-btn" title="Toggle Dark/Light Mode"
-                        aria-label="Toggle theme">
-                        <span class="toggle-icon">🌙</span>
-                        <span class="toggle-text" data-i18n="theme_label">Theme</span>
-                    </button>
+                    <div class="lang-toggle" id="langToggle" title="Toggle Language" aria-label="Toggle language"
+                        role="switch" aria-checked="false" tabindex="0">
+                        <div class="lang-track">
+                            <!-- EN side -->
+                            <div class="lang-bg lang-bg-en">
+                                <span class="lang-flag">🇺🇸</span>
+                            </div>
+                            <!-- PT side -->
+                            <div class="lang-bg lang-bg-pt">
+                                <span class="lang-flag">🇧🇷</span>
+                            </div>
+                            <!-- Knob with current lang -->
+                            <div class="lang-knob">
+                                <span class="lang-label lang-label-en">EN</span>
+                                <span class="lang-label lang-label-pt">PT</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="day-night-toggle" id="themeToggle" title="Toggle Dark/Light Mode"
+                        aria-label="Toggle theme" role="switch" aria-checked="false" tabindex="0">
+                        <div class="toggle-track">
+                            <!-- Day background -->
+                            <div class="toggle-bg toggle-bg-day">
+                                <div class="cloud cloud-1"></div>
+                                <div class="cloud cloud-2"></div>
+                                <div class="cloud cloud-3"></div>
+                            </div>
+                            <!-- Night background -->
+                            <div class="toggle-bg toggle-bg-night">
+                                <div class="star star-1"></div>
+                                <div class="star star-2"></div>
+                                <div class="star star-3"></div>
+                                <div class="star star-4"></div>
+                                <div class="star star-5"></div>
+                            </div>
+                            <!-- Sun/Moon knob -->
+                            <div class="toggle-knob">
+                                <div class="sun-face"></div>
+                                <div class="moon-craters">
+                                    <div class="crater crater-1"></div>
+                                    <div class="crater crater-2"></div>
+                                    <div class="crater crater-3"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="control-group">
                     <button id="startBtn" class="primary-btn" onclick="toggleSimulation()"
