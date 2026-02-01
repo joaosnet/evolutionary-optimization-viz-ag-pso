@@ -1099,7 +1099,7 @@ let titleClickCount = 0;
 let titleClickTimer = null;
 
 
-function generatePdfReport() {
+async function generatePdfReport() {
     const reportBtn = document.getElementById('reportBtn');
     if (reportBtn) {
         reportBtn.disabled = true;
@@ -1108,6 +1108,12 @@ function generatePdfReport() {
 
     try {
         const { jsPDF } = window.jspdf;
+
+        // Capture images (awaiting promises)
+        const agImg = await Plotly.toImage(document.getElementById('agPlot'), { format: 'png', width: 500, height: 400 });
+        const psoImg = await Plotly.toImage(document.getElementById('psoPlot'), { format: 'png', width: 500, height: 400 });
+        const convImg = await Plotly.toImage(document.getElementById('convergencePlot'), { format: 'png', width: 600, height: 350 });
+
         const doc = new jsPDF();
 
         // --- SBC Layout Constants ---
@@ -1128,6 +1134,7 @@ function generatePdfReport() {
         // State
         let currentCol = 1; // 1 or 2
         let cursorY = marginTop;
+        let columnStartY = marginTop; // Track where columns should start on current page
 
         doc.setFont('times', 'normal'); // SBC uses Times
 
@@ -1137,11 +1144,12 @@ function generatePdfReport() {
             if (cursorY + height > pageHeight - marginBottom) {
                 if (currentCol === 1) {
                     currentCol = 2;
-                    cursorY = marginTop;
+                    cursorY = columnStartY;
                 } else {
                     doc.addPage();
                     currentCol = 1;
-                    cursorY = marginTop;
+                    columnStartY = marginTop; // Reset to top for new pages
+                    cursorY = columnStartY;
                 }
             }
         }
@@ -1215,6 +1223,23 @@ function generatePdfReport() {
 
         function addBullet(text) {
             addText('• ' + text, 10, 'normal', 4);
+        }
+
+        function addImage(imgData, caption, height = 50) {
+            checkSpace(height + 10);
+
+            // Image fills column width
+            doc.addImage(imgData, 'PNG', getCurrentX(), cursorY, colWidth, height);
+            cursorY += height + 2;
+
+            doc.setFontSize(8);
+            doc.setFont('times', 'italic');
+            // Centered caption
+            const captionLines = doc.splitTextToSize('Fig: ' + caption, colWidth);
+            doc.text(captionLines, getCurrentX() + (colWidth / 2), cursorY, { align: 'center' });
+            cursorY += (captionLines.length * 3) + 4;
+
+            doc.setFont('times', 'normal');
         }
 
         // --- Data Collection ---
@@ -1304,6 +1329,9 @@ function generatePdfReport() {
         doc.text(splitAbs, marginLeft, cursorY + 5);
         cursorY += (splitAbs.length * 4.5) + 12;
 
+        // Lock in the start Y for columns on Page 1 so col 2 starts below abstract
+        columnStartY = cursorY;
+
         // --- Start Columns ---
         // 1. Introdução
         addSectionHeading('1. Introdução');
@@ -1347,6 +1375,10 @@ function generatePdfReport() {
         const tableHeight = doc.lastAutoTable.finalY - table1Y;
         cursorY = doc.lastAutoTable.finalY + 5;
 
+        // Add 3D Plots
+        addImage(agImg, 'População Final (AG)', 50);
+        addImage(psoImg, 'População Final (PSO)', 50);
+
         // Hack: if autoTable broke page, we need to detect and handle layout state. 
         // jsPDF autoTable page break handling with manual columns is tricky.
         // Assuming small table fits.
@@ -1371,6 +1403,8 @@ function generatePdfReport() {
         cursorY = doc.lastAutoTable.finalY + 5;
 
         addSubsectionHeading('4.2 Convergência');
+
+        addImage(convImg, 'Curva de Convergência (Fitness vs Iteração)', 45);
 
         // Sampling for table
         const total = data.history_ag.length;
@@ -1405,11 +1439,12 @@ function generatePdfReport() {
             if (cursorY > pageHeight - marginBottom) {
                 if (currentCol === 1) {
                     currentCol = 2;
-                    cursorY = marginTop;
+                    cursorY = columnStartY;
                 } else {
                     doc.addPage();
                     currentCol = 1;
-                    cursorY = marginTop;
+                    columnStartY = marginTop;
+                    cursorY = columnStartY;
                 }
             }
         }
