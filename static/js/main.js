@@ -1,3 +1,7 @@
+/**
+ * Main Application - Client-Side Optimization Visualization
+ * Static version for GitHub Pages (no backend required)
+ */
 
 // DOM Elements
 const agScoreEl = document.getElementById('ag-score');
@@ -10,11 +14,16 @@ const dimensionsInputEl = document.getElementById('dimensions');
 const functionErrorEl = document.getElementById('function-error');
 const fixedDimsGridEl = document.getElementById('fixed-dims-grid');
 
-let ws;
+// Simulation state
 let isRunning = false;
 let currentIteration = 0;
 let maxComputedIteration = 0;
 let resizeTimer;
+let simulationTimer = null;
+
+// Algorithm instances
+let gaInstance = null;
+let psoInstance = null;
 
 const historyCache = {
     ag: [],
@@ -177,7 +186,6 @@ function toggleLanguage() {
 }
 
 function updateLanguageUI() {
-    // Set data-lang on document root for CSS-based toggle styling
     document.documentElement.setAttribute('data-lang', currentLang);
 
     const langBtn = document.getElementById('langToggle');
@@ -476,6 +484,7 @@ function initPlots() {
     cachedSurfaceZ = getSurfaceZ();
     const agSurface = { ...surfaceTrace, z: cachedSurfaceZ, opacity: agSurfaceOpacity };
     const psoSurface = { ...surfaceTrace, z: cachedSurfaceZ, opacity: psoSurfaceOpacity };
+
     // AG 3D Plot
     Plotly.newPlot('agPlot', [agSurface, {
         x: [], y: [], z: [],
@@ -502,29 +511,116 @@ function initPlots() {
     updatePlotLanguage();
 }
 
-// --- WebSocket & Simulation ---
-function connectWebSocket() {
-    const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${protocol}://${location.host}/ws/simulation`);
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        updateDashboard(data);
-        if (isRunning) {
-            const delay = parseInt(document.getElementById('sim_delay').value) || 0;
-            if (delay > 0) setTimeout(() => requestStep(), delay);
-            else requestAnimationFrame(requestStep);
-        }
-    };
-    ws.onclose = () => { isRunning = false; updateStartBtnText(); };
-    ws.onopen = () => {
-        // Send initial reset to get the starting state (Iteration 0)
-        resetSimulation();
+// --- Local Simulation (replaces WebSocket) ---
+
+/**
+ * Build the fitness function for algorithms
+ */
+function buildFitnessFunction() {
+    return function (population) {
+        return population.map(individual => {
+            const scope = { pi: Math.PI, e: Math.E };
+            for (let i = 0; i < currentDimensions; i++) {
+                scope[`x${i + 1}`] = individual[i];
+            }
+            try {
+                return compiledExpression.evaluate(scope);
+            } catch (e) {
+                return NaN;
+            }
+        });
     };
 }
 
-function requestStep() {
-    if (isRunning && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ action: "step" }));
+/**
+ * Get bounds for optimization (default: [-5.12, 5.12] for each dimension)
+ */
+function getBounds() {
+    const bounds = [];
+    for (let i = 0; i < currentDimensions; i++) {
+        bounds.push([-5.12, 5.12]);
+    }
+    return bounds;
+}
+
+/**
+ * Initialize algorithm instances with current parameters
+ */
+function initAlgorithms() {
+    if (!compiledExpression) return false;
+
+    const fitnessFunc = buildFitnessFunction();
+    const bounds = getBounds();
+    const popSize = parseInt(document.getElementById('pop_size')?.value) || 50;
+    const convergenceEnabled = document.getElementById('convergence_enabled')?.checked || false;
+    const convergenceThreshold = parseFloat(document.getElementById('convergence_threshold')?.value) || 1e-6;
+    const convergenceWindow = parseInt(document.getElementById('convergence_window')?.value) || 20;
+
+    const gaOptions = {
+        mutationRate: parseFloat(document.getElementById('ag_mutation')?.value) || 0.01,
+        crossoverRate: parseFloat(document.getElementById('ag_crossover')?.value) || 0.7,
+        optimizationMode: getOptimizationMode(),
+        targetValue: getTargetValue(),
+        convergenceThreshold: convergenceEnabled ? convergenceThreshold : 0,
+        convergenceWindow: convergenceWindow
+    };
+
+    const psoOptions = {
+        w: parseFloat(document.getElementById('pso_w')?.value) || 0.5,
+        c1: parseFloat(document.getElementById('pso_c1')?.value) || 1.5,
+        c2: parseFloat(document.getElementById('pso_c2')?.value) || 1.5,
+        optimizationMode: getOptimizationMode(),
+        targetValue: getTargetValue(),
+        convergenceThreshold: convergenceEnabled ? convergenceThreshold : 0,
+        convergenceWindow: convergenceWindow
+    };
+
+    try {
+        gaInstance = new GeneticAlgorithm(fitnessFunc, bounds, popSize, currentDimensions, gaOptions);
+        psoInstance = new ParticleSwarmOptimization(fitnessFunc, bounds, popSize, currentDimensions, psoOptions);
+        return true;
+    } catch (e) {
+        console.error('Failed to initialize algorithms:', e);
+        return false;
+    }
+}
+
+/**
+ * Perform one simulation step
+ */
+function simulationStep() {
+    if (!gaInstance || !psoInstance) return;
+
+    // Step both algorithms
+    gaInstance.step();
+    psoInstance.step();
+
+    // Get states
+    const agState = gaInstance.getState();
+    const psoState = psoInstance.getState();
+
+    // Update dashboard
+    updateDashboard({
+        ag: {
+            ...agState,
+            best_score: agState.bestScore,
+            max_iteration: agState.maxIteration
+        },
+        pso: {
+            ...psoState,
+            best_score: psoState.bestScore,
+            max_iteration: psoState.maxIteration
+        }
+    });
+
+    // Schedule next step if running
+    if (isRunning) {
+        const delay = parseInt(document.getElementById('sim_delay')?.value) || 0;
+        if (delay > 0) {
+            simulationTimer = setTimeout(simulationStep, delay);
+        } else {
+            simulationTimer = requestAnimationFrame(simulationStep);
+        }
     }
 }
 
@@ -541,13 +637,6 @@ function updateDashboard(data) {
     if (data?.ag?.max_iteration !== undefined) {
         updateSeekControls(data.ag.max_iteration, data.ag.iteration);
     }
-    const layoutUpdate = {
-        scene: {
-            camera: { eye: { x: 1.5, y: 1.5, z: 1.5 } } // Initial only, urevision handles rest
-        },
-        datarevision: data.ag.iteration, // Trigger update
-        urevision: true // Preserve user interaction state (camera, zoom)
-    };
 
     if (data.ag) {
         agScoreEl.textContent = Number.isFinite(data.ag.best_score) ? data.ag.best_score.toFixed(4) : "Inf";
@@ -558,8 +647,6 @@ function updateDashboard(data) {
         const agY = data.ag.population.map(p => p[1]);
         const agZ = data.ag.population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))));
 
-        // Use Plotly.react for high-performance updates
-        // We reuse the surface trace (index 0) and update scatter trace (index 1)
         const agData = [{ ...surfaceTrace, z: cachedSurfaceZ, opacity: getNumberValue('ag_surface_opacity', 0.45) }, {
             x: agX, y: agY, z: agZ,
             mode: 'markers',
@@ -602,6 +689,7 @@ function updateDashboard(data) {
             if (convergenceEnabledEl && convergenceEnabledEl.checked && isRunning) {
                 isRunning = false;
                 updateStartBtnText();
+                stopSimulation();
 
                 // Show convergence notification
                 const convergedMsg = translations[currentLang].converged_msg || 'Converged!';
@@ -616,15 +704,39 @@ function updateDashboard(data) {
     }
 }
 
+function stopSimulation() {
+    if (simulationTimer) {
+        if (typeof simulationTimer === 'number') {
+            cancelAnimationFrame(simulationTimer);
+            clearTimeout(simulationTimer);
+        }
+        simulationTimer = null;
+    }
+}
+
 function toggleSimulation() {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
     isRunning = !isRunning;
     updateStartBtnText();
-    if (isRunning) requestStep();
+
+    if (isRunning) {
+        if (!gaInstance || !psoInstance) {
+            if (!initAlgorithms()) {
+                isRunning = false;
+                updateStartBtnText();
+                return;
+            }
+        }
+        simulationStep();
+    } else {
+        stopSimulation();
+    }
 }
 
 function resetSimulation() {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // Stop any running simulation
+    isRunning = false;
+    stopSimulation();
+    updateStartBtnText();
 
     // Clear any previous convergence message
     if (functionErrorEl) {
@@ -641,80 +753,89 @@ function resetSimulation() {
         }
         return;
     }
-    isRunning = false;
-    updateStartBtnText();
+
     currentIteration = 0;
     updateIterationLabel();
     resetHistoryCache();
 
+    // Initialize fresh algorithm instances
+    initAlgorithms();
+
     // Reset Plots
-    Plotly.deleteTraces('convergencePlot', [0, 1]);
-    const seriesNames = getSeriesNames();
-    Plotly.addTraces('convergencePlot', [
-        { x: [], y: [], mode: 'lines', name: seriesNames.ag, line: { color: '#0f766e' } },
-        { x: [], y: [], mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } }
-    ]);
+    try {
+        Plotly.deleteTraces('convergencePlot', [0, 1]);
+        const seriesNames = getSeriesNames();
+        Plotly.addTraces('convergencePlot', [
+            { x: [], y: [], mode: 'lines', name: seriesNames.ag, line: { color: '#0f766e' } },
+            { x: [], y: [], mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } }
+        ]);
+    } catch (e) {
+        console.log('Plotly not ready');
+    }
 
-    const convergenceEnabledEl = document.getElementById('convergence_enabled');
-    const convergenceThresholdEl = document.getElementById('convergence_threshold');
-    const convergenceWindowEl = document.getElementById('convergence_window');
-
-    const params = {
-        action: "reset",
-        function_expr: currentExpression,
-        dimensions: currentDimensions,
-        pop_size: parseInt(document.getElementById('pop_size').value),
-        ag_mutation: parseFloat(document.getElementById('ag_mutation').value),
-        ag_crossover: parseFloat(document.getElementById('ag_crossover').value),
-        pso_w: parseFloat(document.getElementById('pso_w').value),
-        pso_c1: parseFloat(document.getElementById('pso_c1').value),
-        pso_c2: parseFloat(document.getElementById('pso_c2').value),
-        optimization_mode: getOptimizationMode(),
-        target_value: getTargetValue(),
-        convergence_enabled: convergenceEnabledEl ? convergenceEnabledEl.checked : false,
-        convergence_threshold: convergenceThresholdEl ? parseFloat(convergenceThresholdEl.value) : 1e-6,
-        convergence_window: convergenceWindowEl ? parseInt(convergenceWindowEl.value) : 20
-    };
-    ws.send(JSON.stringify(params));
+    // Show initial state
+    if (gaInstance && psoInstance) {
+        const agState = gaInstance.getState();
+        const psoState = psoInstance.getState();
+        updateDashboard({
+            ag: { ...agState, best_score: agState.bestScore, max_iteration: agState.maxIteration },
+            pso: { ...psoState, best_score: psoState.bestScore, max_iteration: psoState.maxIteration }
+        });
+    }
 }
 
-function requestSeek(iteration) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    isRunning = false;
-    updateStartBtnText();
-    ws.send(JSON.stringify({ action: "seek", iteration }));
+function seekToIteration(iteration) {
+    if (!gaInstance || !psoInstance) return;
+
+    const agState = gaInstance.getStateAt(iteration);
+    const psoState = psoInstance.getStateAt(iteration);
+
+    if (agState && psoState) {
+        gaInstance.restoreState(agState);
+        psoInstance.restoreState(psoState);
+
+        updateDashboard({
+            ag: {
+                ...agState,
+                best_score: agState.bestScore,
+                iteration: agState.iteration,
+                max_iteration: gaInstance.history.length - 1
+            },
+            pso: {
+                ...psoState,
+                best_score: psoState.bestScore,
+                iteration: psoState.iteration,
+                max_iteration: psoInstance.history.length - 1
+            }
+        });
+    }
 }
 
 function stepForward() {
     if (currentIteration < maxComputedIteration) {
-        requestSeek(currentIteration + 1);
+        seekToIteration(currentIteration + 1);
     }
 }
 
 function stepBackward() {
     if (currentIteration > 0) {
-        requestSeek(currentIteration - 1);
+        seekToIteration(currentIteration - 1);
     }
 }
 
 function continueSimulation() {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    // First, restore to max iteration, then start running
-    ws.send(JSON.stringify({ action: "continue" }));
+    // Restore to max iteration first
+    const maxIter = Math.max(gaInstance?.history?.length - 1 || 0, 0);
+    if (maxIter > currentIteration) {
+        seekToIteration(maxIter);
+    }
     isRunning = true;
     updateStartBtnText();
-    // Wait for response then start stepping
-    const originalOnMessage = ws.onmessage;
-    ws.onmessage = (event) => {
-        ws.onmessage = originalOnMessage;
-        originalOnMessage(event);
-        if (isRunning) requestStep();
-    };
+    simulationStep();
 }
 
 function updateSeekControls(maxIteration, current) {
     maxComputedIteration = maxIteration;
-    // Update navigation button states
     updateNavigationButtons(current, maxIteration);
 }
 
@@ -726,7 +847,6 @@ function updateNavigationButtons(current, maxIter) {
     if (prevBtn) prevBtn.disabled = current <= 0;
     if (nextBtn) nextBtn.disabled = current >= maxIter;
     if (continueBtn) {
-        // Show continue button only when viewing past iteration and not at max
         const isViewingPast = current < maxIter;
         continueBtn.style.display = isViewingPast ? 'inline-flex' : 'none';
     }
@@ -817,7 +937,6 @@ function runThemeWipe(event, nextTheme) {
 
 function updateThemeToggleState(theme) {
     if (!themeToggleBtn) return;
-    // Update aria-checked for accessibility
     themeToggleBtn.setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
 }
 
@@ -849,7 +968,6 @@ function updatePlotColors(theme) {
 
 if (themeToggleBtn) {
     themeToggleBtn.addEventListener('click', toggleTheme);
-    // Keyboard support for the toggle (Enter/Space)
     themeToggleBtn.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -859,7 +977,6 @@ if (themeToggleBtn) {
 }
 if (langToggleBtn) {
     langToggleBtn.addEventListener('click', toggleLanguage);
-    // Keyboard support for the toggle (Enter/Space)
     langToggleBtn.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -924,8 +1041,6 @@ function initOptimizationControls() {
     updateModeLabels();
 }
 
-
-
 function initExpressionControls() {
     if (functionInputEl) {
         setExpressionValue(DEFAULT_EXPRESSION);
@@ -979,92 +1094,300 @@ function resizePlots() {
     }, 120);
 }
 
-// --- Init ---
-window.onload = () => {
-    initPlots();  // Must run FIRST before any function that uses Plotly
-    initLanguage();
-    initExpressionControls();
-    initTheme();
-    initOptimizationControls();
-    connectWebSocket();
-    initPlotControls();
-    initReportButton();
-    window.addEventListener('resize', resizePlots);
-};
-
-// --- Report Generation (Hidden Feature) ---
+// --- Report Generation (Client-Side PDF with jsPDF) ---
 let titleClickCount = 0;
 let titleClickTimer = null;
 
-function generateReport() {
+
+function generatePdfReport() {
     const reportBtn = document.getElementById('reportBtn');
     if (reportBtn) {
         reportBtn.disabled = true;
         reportBtn.textContent = '⏳';
     }
 
-    const data = {
-        params: {
-            pop_size: parseInt(document.getElementById('pop_size')?.value) || 50,
-            ag_mutation: parseFloat(document.getElementById('ag_mutation')?.value) || 0.01,
-            ag_crossover: parseFloat(document.getElementById('ag_crossover')?.value) || 0.7,
-            pso_w: parseFloat(document.getElementById('pso_w')?.value) || 0.5,
-            pso_c1: parseFloat(document.getElementById('pso_c1')?.value) || 1.5,
-            pso_c2: parseFloat(document.getElementById('pso_c2')?.value) || 1.5,
-            optimization_mode: getOptimizationMode(),
-            target_value: getTargetValue(),
-            function_expr: currentExpression,
-            dimensions: currentDimensions
-        },
-        ag: {
-            best_score: historyCache.ag.length > 0 ? historyCache.ag[historyCache.ag.length - 1] : null,
-            iteration: currentIteration
-        },
-        pso: {
-            best_score: historyCache.pso.length > 0 ? historyCache.pso[historyCache.pso.length - 1] : null,
-            iteration: currentIteration
-        },
-        history_ag: historyCache.ag.filter(v => v !== undefined),
-        history_pso: historyCache.pso.filter(v => v !== undefined)
-    };
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
 
-    fetch('/api/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    })
-        .then(response => {
-            const contentType = response.headers.get('content-type');
-            const filename = contentType?.includes('pdf')
-                ? 'relatorio_ag_pso.pdf'
-                : 'relatorio_ag_pso.tex';
+        // Helper to manage Y position and page breaks
+        let cursorY = 20;
+        const lineHeight = 7;
+        const margin = 20;
+        const pageWidth = doc.internal.pageSize.width;
+        const contentWidth = pageWidth - 2 * margin;
 
-            return response.blob().then(blob => ({ blob, filename }));
-        })
-        .then(({ blob, filename }) => {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        })
-        .catch(err => {
-            console.error('Report generation failed:', err);
-            if (functionErrorEl) {
-                functionErrorEl.textContent = 'Report generation failed';
+        function checkPageBreak(height = lineHeight) {
+            if (cursorY + height > doc.internal.pageSize.height - margin) {
+                doc.addPage();
+                cursorY = 20;
             }
-        })
-        .finally(() => {
-            if (reportBtn) {
-                reportBtn.disabled = false;
-                reportBtn.innerHTML = '📄 <span data-i18n="generate_report">' +
-                    (translations[currentLang]?.generate_report || 'Report') + '</span>';
-            }
+        }
+
+        function addTitle(text) {
+            checkPageBreak(25);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.text(text, pageWidth / 2, cursorY, { align: 'center' });
+            cursorY += 10;
+            doc.setFontSize(12); // Reset
+            doc.setFont('helvetica', 'normal');
+        }
+
+        function addSection(title) {
+            checkPageBreak(15);
+            cursorY += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(14);
+            doc.text(title, margin, cursorY);
+            cursorY += 8;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+        }
+
+        function addSubsection(title) {
+            checkPageBreak(12);
+            cursorY += 3;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.text(title, margin, cursorY);
+            cursorY += 6;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+        }
+
+        function addParagraph(text) {
+            const splitText = doc.splitTextToSize(text, contentWidth);
+            const height = splitText.length * 5; // approx 5mm per line at size 10
+            checkPageBreak(height);
+            doc.text(splitText, margin, cursorY);
+            cursorY += height + 3;
+        }
+
+        function addBullet(text) {
+            const splitText = doc.splitTextToSize(text, contentWidth - 5);
+            const height = splitText.length * 5;
+            checkPageBreak(height);
+            doc.text('•', margin, cursorY);
+            doc.text(splitText, margin + 5, cursorY);
+            cursorY += height + 2;
+        }
+
+        // Data Collection
+        const data = {
+            params: {
+                pop_size: parseInt(document.getElementById('pop_size')?.value) || 50,
+                ag_mutation: parseFloat(document.getElementById('ag_mutation')?.value) || 0.01,
+                ag_crossover: parseFloat(document.getElementById('ag_crossover')?.value) || 0.7,
+                pso_w: parseFloat(document.getElementById('pso_w')?.value) || 0.5,
+                pso_c1: parseFloat(document.getElementById('pso_c1')?.value) || 1.5,
+                pso_c2: parseFloat(document.getElementById('pso_c2')?.value) || 1.5,
+                optimization_mode: getOptimizationMode(),
+                target_value: getTargetValue(),
+                function_expr: currentExpression,
+                dimensions: currentDimensions
+            },
+            ag: {
+                best_score: historyCache.ag.length > 0 ? historyCache.ag[historyCache.ag.length - 1] : null,
+                iteration: currentIteration
+            },
+            pso: {
+                best_score: historyCache.pso.length > 0 ? historyCache.pso[historyCache.pso.length - 1] : null,
+                iteration: currentIteration
+            },
+            history_ag: historyCache.ag,
+            history_pso: historyCache.pso
+        };
+
+        const modeLabels = { min: 'Minimização', max: 'Maximização', target: `Valor Alvo (${data.params.target_value})` };
+        const modeLabel = modeLabels[data.params.optimization_mode] || data.params.optimization_mode;
+
+        // --- Document Content ---
+
+        // Title
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.text('Comparação entre Algoritmo Genético e PSO', pageWidth / 2, cursorY, { align: 'center' });
+        cursorY += 8;
+        doc.setFontSize(14);
+        doc.text('na Otimização de Funções Multimodais', pageWidth / 2, cursorY, { align: 'center' });
+        cursorY += 10;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Relatório Gerado Automaticamente', pageWidth / 2, cursorY, { align: 'center' });
+        cursorY += 8;
+        doc.setFontSize(10);
+        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, cursorY, { align: 'center' });
+        cursorY += 15;
+
+        // Abstract
+        doc.setFont('helvetica', 'bold');
+        doc.text('Resumo', margin, cursorY);
+        cursorY += 6;
+        doc.setFont('helvetica', 'normal');
+        const maxIter = Math.max(data.ag.iteration, data.pso.iteration);
+
+        let winnerText = "ambos os algoritmos obtiveram desempenho similar";
+        const agBest = data.ag.best_score || 0;
+        const psoBest = data.pso.best_score || 0;
+
+        if (data.params.optimization_mode === 'max') {
+            if (agBest > psoBest) winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho";
+            else if (psoBest > agBest) winnerText = "o PSO (Particle Swarm Optimization) obteve melhor desempenho";
+        } else if (data.params.optimization_mode === 'min') {
+            if (agBest < psoBest) winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho";
+            else if (psoBest < agBest) winnerText = "o PSO (Particle Swarm Optimization) obteve melhor desempenho";
+        } else { // Target
+            const agDiff = Math.abs(agBest - data.params.target_value);
+            const psoDiff = Math.abs(psoBest - data.params.target_value);
+            if (agDiff < psoDiff) winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho";
+            else if (psoDiff < agDiff) winnerText = "o PSO (Particle Swarm Optimization) obteve melhor desempenho";
+        }
+
+        addParagraph(`Este relatório apresenta uma análise comparativa entre o Algoritmo Genético (AG) e a Otimização por Enxame de Partículas (PSO). A simulação foi executada com ${maxIter} iterações e população de ${data.params.pop_size} indivíduos. Os resultados demonstram que ${winnerText}.`);
+
+        // 1. Introdução
+        addSection('1. Introdução');
+        addParagraph('Este documento documenta uma simulação interativa comparando dois populares algoritmos metaheurísticos na otimização de funções multimodais.');
+
+        addSubsection('1.1 Função Objetivo');
+        addParagraph(`A função objetivo utilizada é: f(x) = ${data.params.function_expr}`);
+        addParagraph(`Domínio: [-5.12, 5.12] em ${data.params.dimensions} dimensões.`);
+
+        addSubsection('1.2 Modo de Otimização');
+        addParagraph(`Modo selecionado: ${modeLabel}`);
+
+        // 2. Fundamentação Teórica (Simplified)
+        addSection('2. Fundamentação Teórica');
+        addParagraph('O Algoritmo Genético (AG) utiliza seleção por torneio, crossover BLX-alpha e mutação gaussiana com representação real. O PSO utiliza a formulação canônica com inércia, coeficientes cognitivo e social.');
+
+        // 3. Configuração Experimental (Table)
+        addSection('3. Configuração Experimental');
+
+        doc.autoTable({
+            startY: cursorY,
+            head: [['Parâmetro', 'AG', 'PSO']],
+            body: [
+                ['População/Enxame', data.params.pop_size, data.params.pop_size],
+                ['Dimensões', data.params.dimensions, data.params.dimensions],
+                ['Taxa de Mutação', data.params.ag_mutation, '--'],
+                ['Taxa de Crossover', data.params.ag_crossover, '--'],
+                ['Inércia (w)', '--', data.params.pso_w],
+                ['Cognitivo (c1)', '--', data.params.pso_c1],
+                ['Social (c2)', '--', data.params.pso_c2]
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [41, 128, 185] },
+            margin: { left: margin, right: margin }
         });
+        cursorY = doc.lastAutoTable.finalY + 10;
+
+        // 4. Resultados Experimentais
+        addSection('4. Resultados Experimentais');
+
+        addSubsection('4.1 Resumo dos Resultados');
+        doc.autoTable({
+            startY: cursorY,
+            head: [['Métrica', 'Algoritmo Genético', 'PSO']],
+            body: [
+                ['Melhor Valor', (data.ag.best_score?.toFixed(6) || 'N/A'), (data.pso.best_score?.toFixed(6) || 'N/A')],
+                ['Iterações', data.ag.iteration, data.pso.iteration]
+            ],
+            theme: 'striped',
+            headStyles: { fillColor: [41, 128, 185] },
+            margin: { left: margin, right: margin }
+        });
+        cursorY = doc.lastAutoTable.finalY + 10;
+
+        addSubsection('4.2 Análise de Convergência');
+
+        // Sampling logic
+        const total = data.history_ag.length;
+        let step = 1;
+        if (total <= 10) step = 1;
+        else if (total <= 50) step = 5;
+        else if (total <= 100) step = 10;
+        else step = Math.max(1, Math.floor(total / 15));
+
+        const convRows = [];
+        for (let i = 0; i < total; i += step) {
+            const agV = data.history_ag[i];
+            const psoV = data.history_pso[i];
+            if (agV !== undefined && psoV !== undefined) {
+                convRows.push([i, agV.toFixed(6), psoV.toFixed(6), (agV - psoV).toFixed(6)]);
+            }
+        }
+        // Always include last
+        if (total > 0 && (total - 1) % step !== 0) {
+            const i = total - 1;
+            const agV = data.history_ag[i];
+            const psoV = data.history_pso[i];
+            if (agV !== undefined && psoV !== undefined) {
+                convRows.push([i, agV.toFixed(6), psoV.toFixed(6), (agV - psoV).toFixed(6)]);
+            }
+        }
+
+        doc.autoTable({
+            startY: cursorY,
+            head: [['Iteração', 'AG (Best)', 'PSO (Best)', 'Diferença']],
+            body: convRows,
+            theme: 'plain',
+            styles: { fontSize: 9 },
+            headStyles: { fillColor: [50, 50, 50], textColor: 255 },
+            margin: { left: margin, right: margin }
+        });
+        cursorY = doc.lastAutoTable.finalY + 10;
+
+        addSubsection('4.3 Comparação Qualitativa');
+        doc.autoTable({
+            startY: cursorY,
+            head: [['Critério', 'AG', 'PSO', 'Vantagem']],
+            body: [
+                ['Velocidade Convergência', 'Média', 'Rápida', 'PSO'],
+                ['Diversidade', 'Alta', 'Média', 'AG'],
+                ['Escape Ótimos Locais', 'Bom', 'Médio', 'AG'],
+                ['Parâmetros', 'Muitos', 'Poucos', 'PSO']
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [41, 128, 185] },
+            margin: { left: margin, right: margin }
+        });
+        cursorY = doc.lastAutoTable.finalY + 10;
+
+        // 5. Discussão
+        addSection('5. Discussão');
+        addSubsection('5.1 Algoritmo Genético');
+        addBullet('Mantém diversidade via mutação');
+        addBullet('Convergência gradual e robusta');
+
+        addSubsection('5.2 PSO');
+        addBullet('Convergência rápida inicial');
+        addBullet('Comportamento de enxame');
+
+        // 6. Conclusão
+        addSection('6. Conclusões');
+        addBullet('Ambos os algoritmos são eficazes para otimização multimodal.');
+        addBullet('O PSO geralmente converge mais rápido inicialmente.');
+        addBullet('O AG oferece maior diversidade e robustez em longo prazo.');
+
+        // Save PDF
+        doc.save('relatorio_otimizacao_ag_pso.pdf');
+
+    } catch (err) {
+        console.error('PDF generation failed:', err);
+        if (functionErrorEl) {
+            functionErrorEl.textContent = 'Erro ao gerar PDF: ' + err.message;
+        }
+    } finally {
+        if (reportBtn) {
+            reportBtn.disabled = false;
+            reportBtn.innerHTML = '📄 <span data-i18n="generate_report">' +
+                (translations[currentLang]?.generate_report || 'Relatório') + '</span>';
+        }
+    }
 }
+
+
 
 function revealReportButton() {
     const reportBtn = document.getElementById('reportBtn');
@@ -1076,6 +1399,7 @@ function revealReportButton() {
 
 function initReportButton() {
     const mainTitle = document.getElementById('mainTitle');
+    const reportBtn = document.getElementById('reportBtn');
 
     // Triple-click on title to reveal button
     if (mainTitle) {
@@ -1095,12 +1419,41 @@ function initReportButton() {
         });
     }
 
+    // Attach click handler to report button
+    if (reportBtn) {
+        reportBtn.addEventListener('click', generatePdfReport);
+    }
+
     // Ctrl+Shift+R keybind
     document.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.shiftKey && e.key === 'R') {
             e.preventDefault();
             revealReportButton();
-            generateReport();
+            generatePdfReport();
         }
     });
 }
+
+// --- Init ---
+window.onload = () => {
+    initPlots();
+    initLanguage();
+    initExpressionControls();
+    initTheme();
+    initOptimizationControls();
+    initPlotControls();
+    initReportButton();
+    window.addEventListener('resize', resizePlots);
+
+    // Initialize algorithms and show initial state
+    setTimeout(() => {
+        if (initAlgorithms()) {
+            const agState = gaInstance.getState();
+            const psoState = psoInstance.getState();
+            updateDashboard({
+                ag: { ...agState, best_score: agState.bestScore, max_iteration: agState.maxIteration },
+                pso: { ...psoState, best_score: psoState.bestScore, max_iteration: psoState.maxIteration }
+            });
+        }
+    }, 100);
+};
