@@ -1110,70 +1110,114 @@ function generatePdfReport() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
 
-        // Helper to manage Y position and page breaks
-        let cursorY = 20;
-        const lineHeight = 7;
-        const margin = 20;
-        const pageWidth = doc.internal.pageSize.width;
-        const contentWidth = pageWidth - 2 * margin;
+        // --- SBC Layout Constants ---
+        const pageWidth = doc.internal.pageSize.width;   // 210
+        const pageHeight = doc.internal.pageSize.height; // 297
+        const marginTop = 25;
+        const marginBottom = 25;
+        const marginLeft = 15;
+        const marginRight = 15;
+        const colGap = 10;
 
-        function checkPageBreak(height = lineHeight) {
-            if (cursorY + height > doc.internal.pageSize.height - margin) {
-                doc.addPage();
-                cursorY = 20;
+        // Column Calculations
+        const contentWidth = pageWidth - marginLeft - marginRight;
+        const colWidth = (contentWidth - colGap) / 2;
+        const col1X = marginLeft;
+        const col2X = marginLeft + colWidth + colGap;
+
+        // State
+        let currentCol = 1; // 1 or 2
+        let cursorY = marginTop;
+
+        doc.setFont('times', 'normal'); // SBC uses Times
+
+        // --- Layout Helpers ---
+
+        function checkSpace(height) {
+            if (cursorY + height > pageHeight - marginBottom) {
+                if (currentCol === 1) {
+                    currentCol = 2;
+                    cursorY = marginTop;
+                } else {
+                    doc.addPage();
+                    currentCol = 1;
+                    cursorY = marginTop;
+                }
             }
         }
 
-        function addTitle(text) {
-            checkPageBreak(25);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(16);
-            doc.text(text, pageWidth / 2, cursorY, { align: 'center' });
-            cursorY += 10;
-            doc.setFontSize(12); // Reset
-            doc.setFont('helvetica', 'normal');
+        function getCurrentX() {
+            return currentCol === 1 ? col1X : col2X;
         }
 
-        function addSection(title) {
-            checkPageBreak(15);
-            cursorY += 5;
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(14);
-            doc.text(title, margin, cursorY);
-            cursorY += 8;
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(10);
+        // --- Content Helpers ---
+
+        // Adds full-width text (for Title/Abstract only, forces reset to col 1 after if needed)
+        // Note: SBC abstract is technically part of the header or a block before columns, 
+        // but here we might just put it at top of page 1.
+        function addFullWidthText(text, fontSize = 12, fontStyle = 'normal', align = 'left') {
+            doc.setFont('times', fontStyle);
+            doc.setFontSize(fontSize);
+
+            const lines = doc.splitTextToSize(text, contentWidth);
+            const height = lines.length * (fontSize * 0.4);
+
+            // If we are deep in page, adds page. For title usually we are at top.
+            if (cursorY + height > pageHeight - marginBottom) {
+                doc.addPage();
+                cursorY = marginTop;
+            }
+
+            doc.text(lines, marginLeft + (align === 'center' ? contentWidth / 2 : 0), cursorY, { align: align });
+            cursorY += height + 4;
+            doc.setFont('times', 'normal');
         }
 
-        function addSubsection(title) {
-            checkPageBreak(12);
-            cursorY += 3;
-            doc.setFont('helvetica', 'bold');
+        function addText(text, fontSize = 10, fontStyle = 'normal', indent = 0) {
+            doc.setFont('times', fontStyle);
+            doc.setFontSize(fontSize);
+
+            // Split text for column width
+            const availWidth = colWidth - indent;
+            const lines = doc.splitTextToSize(text, availWidth);
+
+            // Print line by line to handle column breaks inside a paragraph
+            const lineHeight = fontSize * 0.4;
+
+            lines.forEach(line => {
+                checkSpace(lineHeight);
+                doc.text(line, getCurrentX() + indent, cursorY);
+                cursorY += lineHeight;
+            });
+
+            cursorY += 2; // small paragraph gap
+        }
+
+        function addSectionHeading(title) {
+            cursorY += 4;
+            checkSpace(8);
+            doc.setFont('times', 'bold');
             doc.setFontSize(12);
-            doc.text(title, margin, cursorY);
+            doc.text(title, getCurrentX(), cursorY);
+            doc.setFont('times', 'normal');
             cursorY += 6;
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(10);
         }
 
-        function addParagraph(text) {
-            const splitText = doc.splitTextToSize(text, contentWidth);
-            const height = splitText.length * 5; // approx 5mm per line at size 10
-            checkPageBreak(height);
-            doc.text(splitText, margin, cursorY);
-            cursorY += height + 3;
+        function addSubsectionHeading(title) {
+            cursorY += 2;
+            checkSpace(6);
+            doc.setFont('times', 'bold');
+            doc.setFontSize(11); // Slightly smaller than section
+            doc.text(title, getCurrentX(), cursorY);
+            doc.setFont('times', 'normal');
+            cursorY += 5;
         }
 
         function addBullet(text) {
-            const splitText = doc.splitTextToSize(text, contentWidth - 5);
-            const height = splitText.length * 5;
-            checkPageBreak(height);
-            doc.text('•', margin, cursorY);
-            doc.text(splitText, margin + 5, cursorY);
-            cursorY += height + 2;
+            addText('• ' + text, 10, 'normal', 4);
         }
 
-        // Data Collection
+        // --- Data Collection ---
         const data = {
             params: {
                 pop_size: parseInt(document.getElementById('pop_size')?.value) || 50,
@@ -1202,187 +1246,211 @@ function generatePdfReport() {
         const modeLabels = { min: 'Minimização', max: 'Maximização', target: `Valor Alvo (${data.params.target_value})` };
         const modeLabel = modeLabels[data.params.optimization_mode] || data.params.optimization_mode;
 
-        // --- Document Content ---
+        // --- Document Generation ---
 
-        // Title
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(18);
-        doc.text('Comparação entre Algoritmo Genético e PSO', pageWidth / 2, cursorY, { align: 'center' });
-        cursorY += 8;
-        doc.setFontSize(14);
-        doc.text('na Otimização de Funções Multimodais', pageWidth / 2, cursorY, { align: 'center' });
-        cursorY += 10;
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Relatório Gerado Automaticamente', pageWidth / 2, cursorY, { align: 'center' });
-        cursorY += 8;
-        doc.setFontSize(10);
-        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, cursorY, { align: 'center' });
-        cursorY += 15;
+        // 1. Title Area (Full Width)
+        addFullWidthText('Comparação entre Algoritmo Genético e PSO', 16, 'bold', 'center');
+        cursorY -= 2; // tight
+        addFullWidthText('na Otimização de Funções Multimodais', 14, 'bold', 'center');
 
-        // Abstract
-        doc.setFont('helvetica', 'bold');
-        doc.text('Resumo', margin, cursorY);
-        cursorY += 6;
-        doc.setFont('helvetica', 'normal');
+        cursorY += 2;
+        doc.setLineWidth(0.5);
+        doc.line(marginLeft, cursorY, marginLeft + contentWidth, cursorY);
+        cursorY += 5;
+
+        // Abstract (Full Width simulation using indented margins or just full width? 
+        // SBC Abstract is usually just a bold paragraph)
+        // Let's keep it simple: Full width abstract for readability, then columns.
+
+        doc.setFont('times', 'bold');
+        doc.setFontSize(11);
+        const absTitle = doc.splitTextToSize('Resumo. ', contentWidth);
+        doc.text(absTitle[0], marginLeft, cursorY);
+        const titleWidth = doc.getTextWidth('Resumo. ');
+
+        // Construct abstract text
         const maxIter = Math.max(data.ag.iteration, data.pso.iteration);
-
         let winnerText = "ambos os algoritmos obtiveram desempenho similar";
         const agBest = data.ag.best_score || 0;
         const psoBest = data.pso.best_score || 0;
 
         if (data.params.optimization_mode === 'max') {
             if (agBest > psoBest) winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho";
-            else if (psoBest > agBest) winnerText = "o PSO (Particle Swarm Optimization) obteve melhor desempenho";
+            else if (psoBest > agBest) winnerText = "o PSO obteve melhor desempenho";
         } else if (data.params.optimization_mode === 'min') {
             if (agBest < psoBest) winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho";
-            else if (psoBest < agBest) winnerText = "o PSO (Particle Swarm Optimization) obteve melhor desempenho";
+            else if (psoBest < agBest) winnerText = "o PSO obteve melhor desempenho";
         } else { // Target
             const agDiff = Math.abs(agBest - data.params.target_value);
             const psoDiff = Math.abs(psoBest - data.params.target_value);
             if (agDiff < psoDiff) winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho";
-            else if (psoDiff < agDiff) winnerText = "o PSO (Particle Swarm Optimization) obteve melhor desempenho";
+            else if (psoDiff < agDiff) winnerText = "o PSO obteve melhor desempenho";
         }
 
-        addParagraph(`Este relatório apresenta uma análise comparativa entre o Algoritmo Genético (AG) e a Otimização por Enxame de Partículas (PSO). A simulação foi executada com ${maxIter} iterações e população de ${data.params.pop_size} indivíduos. Os resultados demonstram que ${winnerText}.`);
+        const absText = `Este relatório apresenta uma análise comparativa entre o Algoritmo Genético (AG) e a Otimização por Enxame de Partículas (PSO). A simulação foi executada com ${maxIter} iterações e população de ${data.params.pop_size} indivíduos. Os resultados demonstram que ${winnerText}.`;
 
+        doc.setFont('times', 'italic'); // Abstract body often italic
+        doc.setFontSize(10);
+
+        // Trick to put text right after "Resumo."
+        const splitAbs = doc.splitTextToSize(absText, contentWidth);
+        // First line logic is annoying, simpler to just print below or full width block
+        // Let's print full width block
+        doc.text(splitAbs, marginLeft, cursorY + 5);
+        cursorY += (splitAbs.length * 4.5) + 12;
+
+        // --- Start Columns ---
         // 1. Introdução
-        addSection('1. Introdução');
-        addParagraph('Este documento documenta uma simulação interativa comparando dois populares algoritmos metaheurísticos na otimização de funções multimodais.');
+        addSectionHeading('1. Introdução');
+        addText('A otimização de funções multimodais representa um desafio significativo. Este relatório compara dois algoritmos metaheurísticos populares: AG e PSO.');
 
-        addSubsection('1.1 Função Objetivo');
-        addParagraph(`A função objetivo utilizada é: f(x) = ${data.params.function_expr}`);
-        addParagraph(`Domínio: [-5.12, 5.12] em ${data.params.dimensions} dimensões.`);
+        addSubsectionHeading('1.1 Função Objetivo');
+        addText(`Função: f(x) = ${data.params.function_expr}`);
+        addText(`Domínio: [-5.12, 5.12] em ${data.params.dimensions} dimensões.`);
 
-        addSubsection('1.2 Modo de Otimização');
-        addParagraph(`Modo selecionado: ${modeLabel}`);
+        addSubsectionHeading('1.2 Modo de Otimização');
+        addText(`Modo selecionado: ${modeLabel}`);
 
-        // 2. Fundamentação Teórica (Simplified)
-        addSection('2. Fundamentação Teórica');
-        addParagraph('O Algoritmo Genético (AG) utiliza seleção por torneio, crossover BLX-alpha e mutação gaussiana com representação real. O PSO utiliza a formulação canônica com inércia, coeficientes cognitivo e social.');
+        // 2. Fundamentação Teórica
+        addSectionHeading('2. Fundamentação Teórica');
+        addText('O Algoritmo Genético (AG) utiliza seleção por torneio, crossover BLX-alpha e mutação gaussiana. O PSO utiliza a formulação canônica com inércia.');
 
         // 3. Configuração Experimental (Table)
-        addSection('3. Configuração Experimental');
+        addSectionHeading('3. Configuração Experimental');
 
+        // We use autoTable but constrained to column width
+        const table1Y = cursorY;
         doc.autoTable({
-            startY: cursorY,
+            startY: table1Y,
             head: [['Parâmetro', 'AG', 'PSO']],
             body: [
-                ['População/Enxame', data.params.pop_size, data.params.pop_size],
-                ['Dimensões', data.params.dimensions, data.params.dimensions],
-                ['Taxa de Mutação', data.params.ag_mutation, '--'],
-                ['Taxa de Crossover', data.params.ag_crossover, '--'],
+                ['População', data.params.pop_size, data.params.pop_size],
+                ['Mutação', data.params.ag_mutation, '--'],
+                ['Crossover', data.params.ag_crossover, '--'],
                 ['Inércia (w)', '--', data.params.pso_w],
-                ['Cognitivo (c1)', '--', data.params.pso_c1],
-                ['Social (c2)', '--', data.params.pso_c2]
+                ['Cognitivo', '--', data.params.pso_c1],
+                ['Social', '--', data.params.pso_c2]
             ],
             theme: 'grid',
-            headStyles: { fillColor: [41, 128, 185] },
-            margin: { left: margin, right: margin }
+            headStyles: { fillColor: [50, 50, 50], fontSize: 8 },
+            styles: { fontSize: 8, font: 'times' },
+            margin: { left: getCurrentX() },
+            tableWidth: colWidth
         });
-        cursorY = doc.lastAutoTable.finalY + 10;
 
-        // 4. Resultados Experimentais
-        addSection('4. Resultados Experimentais');
+        // Update cursorY based on table height
+        const tableHeight = doc.lastAutoTable.finalY - table1Y;
+        cursorY = doc.lastAutoTable.finalY + 5;
 
-        addSubsection('4.1 Resumo dos Resultados');
+        // Hack: if autoTable broke page, we need to detect and handle layout state. 
+        // jsPDF autoTable page break handling with manual columns is tricky.
+        // Assuming small table fits.
+
+        // 4. Resultados
+        addSectionHeading('4. Resultados Experimentais');
+
+        addSubsectionHeading('4.1 Resumo');
         doc.autoTable({
             startY: cursorY,
-            head: [['Métrica', 'Algoritmo Genético', 'PSO']],
+            head: [['Métrica', 'AG', 'PSO']],
             body: [
-                ['Melhor Valor', (data.ag.best_score?.toFixed(6) || 'N/A'), (data.pso.best_score?.toFixed(6) || 'N/A')],
+                ['Melhor', (data.ag.best_score?.toFixed(6) || 'N/A'), (data.pso.best_score?.toFixed(6) || 'N/A')],
                 ['Iterações', data.ag.iteration, data.pso.iteration]
             ],
             theme: 'striped',
-            headStyles: { fillColor: [41, 128, 185] },
-            margin: { left: margin, right: margin }
+            headStyles: { fillColor: [50, 50, 50], fontSize: 8 },
+            styles: { fontSize: 8, font: 'times' },
+            margin: { left: getCurrentX() },
+            tableWidth: colWidth
         });
-        cursorY = doc.lastAutoTable.finalY + 10;
+        cursorY = doc.lastAutoTable.finalY + 5;
 
-        addSubsection('4.2 Análise de Convergência');
+        addSubsectionHeading('4.2 Convergência');
 
-        // Sampling logic
+        // Sampling for table
         const total = data.history_ag.length;
-        let step = 1;
-        if (total <= 10) step = 1;
-        else if (total <= 50) step = 5;
-        else if (total <= 100) step = 10;
-        else step = Math.max(1, Math.floor(total / 15));
-
+        let step = Math.max(1, Math.floor(total / 10)); // fewer rows for PDF
         const convRows = [];
         for (let i = 0; i < total; i += step) {
             const agV = data.history_ag[i];
             const psoV = data.history_pso[i];
             if (agV !== undefined && psoV !== undefined) {
-                convRows.push([i, agV.toFixed(6), psoV.toFixed(6), (agV - psoV).toFixed(6)]);
+                convRows.push([i, agV.toFixed(4), psoV.toFixed(4)]);
             }
         }
-        // Always include last
         if (total > 0 && (total - 1) % step !== 0) {
             const i = total - 1;
-            const agV = data.history_ag[i];
-            const psoV = data.history_pso[i];
-            if (agV !== undefined && psoV !== undefined) {
-                convRows.push([i, agV.toFixed(6), psoV.toFixed(6), (agV - psoV).toFixed(6)]);
-            }
+            convRows.push([i, data.history_ag[i].toFixed(4), data.history_pso[i].toFixed(4)]);
         }
 
         doc.autoTable({
             startY: cursorY,
-            head: [['Iteração', 'AG (Best)', 'PSO (Best)', 'Diferença']],
+            head: [['Iter', 'AG', 'PSO']],
             body: convRows,
             theme: 'plain',
-            styles: { fontSize: 9 },
-            headStyles: { fillColor: [50, 50, 50], textColor: 255 },
-            margin: { left: margin, right: margin }
+            headStyles: { fillColor: [50, 50, 50], textColor: 255, fontSize: 8 },
+            styles: { fontSize: 7, font: 'times' },
+            margin: { left: getCurrentX() },
+            tableWidth: colWidth
         });
-        cursorY = doc.lastAutoTable.finalY + 10;
+        cursorY = doc.lastAutoTable.finalY + 5;
 
-        addSubsection('4.3 Comparação Qualitativa');
-        doc.autoTable({
-            startY: cursorY,
-            head: [['Critério', 'AG', 'PSO', 'Vantagem']],
-            body: [
-                ['Velocidade Convergência', 'Média', 'Rápida', 'PSO'],
-                ['Diversidade', 'Alta', 'Média', 'AG'],
-                ['Escape Ótimos Locais', 'Bom', 'Médio', 'AG'],
-                ['Parâmetros', 'Muitos', 'Poucos', 'PSO']
-            ],
-            theme: 'grid',
-            headStyles: { fillColor: [41, 128, 185] },
-            margin: { left: margin, right: margin }
-        });
-        cursorY = doc.lastAutoTable.finalY + 10;
+        CHECK_FOR_PAGE_BREAK_AFTER_TABLE: {
+            // If table went too low, move to next column/page manual check
+            if (cursorY > pageHeight - marginBottom) {
+                if (currentCol === 1) {
+                    currentCol = 2;
+                    cursorY = marginTop;
+                } else {
+                    doc.addPage();
+                    currentCol = 1;
+                    cursorY = marginTop;
+                }
+            }
+        }
 
         // 5. Discussão
-        addSection('5. Discussão');
-        addSubsection('5.1 Algoritmo Genético');
-        addBullet('Mantém diversidade via mutação');
-        addBullet('Convergência gradual e robusta');
+        addSectionHeading('5. Discussão');
+        addSubsectionHeading('5.1 Algoritmo Genético');
+        addBullet('Diversidade via mutação');
+        addBullet('Convergência robusta');
 
-        addSubsection('5.2 PSO');
-        addBullet('Convergência rápida inicial');
+        addSubsectionHeading('5.2 PSO');
+        addBullet('Convergência rápida');
         addBullet('Comportamento de enxame');
 
-        // 6. Conclusão
-        addSection('6. Conclusões');
-        addBullet('Ambos os algoritmos são eficazes para otimização multimodal.');
-        addBullet('O PSO geralmente converge mais rápido inicialmente.');
-        addBullet('O AG oferece maior diversidade e robustez em longo prazo.');
+        // 6. Conclusões
+        addSectionHeading('6. Conclusões');
+        addBullet('Ambos são eficazes.');
+        addBullet('PSO: velocidade inicial.');
+        addBullet('AG: robustez a longo prazo.');
+
+        // Info
+        cursorY += 5;
+        doc.setFontSize(8);
+        doc.setTextColor(100);
+        addText(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 8, 'italic');
+
 
         // Save PDF
-        doc.save('relatorio_otimizacao_ag_pso.pdf');
+        doc.save('relatorio_sbc_ag_pso.pdf');
 
     } catch (err) {
         console.error('PDF generation failed:', err);
-        if (functionErrorEl) {
+        if (typeof functionErrorEl !== 'undefined' && functionErrorEl) {
             functionErrorEl.textContent = 'Erro ao gerar PDF: ' + err.message;
+        } else {
+            alert('Erro ao gerar PDF: ' + err.message);
         }
     } finally {
         if (reportBtn) {
             reportBtn.disabled = false;
-            reportBtn.innerHTML = '📄 <span data-i18n="generate_report">' +
-                (translations[currentLang]?.generate_report || 'Relatório') + '</span>';
+            if (typeof translations !== 'undefined' && translations[currentLang]) {
+                reportBtn.innerHTML = '📄 <span data-i18n="generate_report">' +
+                    (translations[currentLang]?.generate_report || 'Relatório') + '</span>';
+            } else {
+                reportBtn.textContent = 'Relatório';
+            }
         }
     }
 }
