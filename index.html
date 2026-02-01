@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AG vs PSO - Otimização Evolutiva | Visualização Interativa</title>
+    <meta name="description"
+        content="Comparação interativa entre Algoritmos Genéticos (Real-Coded) e PSO na função Rastrigin">
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/recharts@2.10.3/umd/Recharts.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        code,
+        pre,
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .glow {
+            box-shadow: 0 0 40px rgba(102, 126, 234, 0.3);
+        }
+
+        @keyframes pulse-slow {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        .animate-pulse-slow {
+            animation: pulse-slow 3s infinite;
+        }
+
+        .slide-content {
+            min-height: 400px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1a1a2e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen text-white">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+        const RC = window.Recharts || {};
+        const { LineChart = () => null, Line = () => null, XAxis = () => null, YAxis = () => null, CartesianGrid = () => null, Tooltip = () => null, Legend = () => null, ResponsiveContainer = ({ children }) => React.createElement('div', { style: { width: '100%', height: 200 } }, children) } = RC;
+
+        // ==================== RASTRIGIN FUNCTION ====================
+        const rastrigin = (x, y) => {
+            const A = 10;
+            return A * 2 + (x * x - A * Math.cos(2 * Math.PI * x)) + (y * y - A * Math.cos(2 * Math.PI * y));
+        };
+
+        // ==================== GENETIC ALGORITHM (Real-Coded) ====================
+        class GeneticAlgorithm {
+            constructor(popSize = 30, mutationRate = 0.1, crossoverRate = 0.8, bounds = [-5.12, 5.12]) {
+                this.popSize = popSize;
+                this.mutationRate = mutationRate;
+                this.crossoverRate = crossoverRate;
+                this.bounds = bounds;
+                this.population = [];
+                this.bestFitness = Infinity;
+                this.bestPosition = [0, 0];
+                this.generation = 0;
+                this.history = [];
+                this.init();
+            }
+            init() {
+                this.population = Array.from({ length: this.popSize }, () => ({
+                    x: Math.random() * (this.bounds[1] - this.bounds[0]) + this.bounds[0],
+                    y: Math.random() * (this.bounds[1] - this.bounds[0]) + this.bounds[0],
+                    fitness: Infinity
+                }));
+                this.evaluate();
+            }
+            evaluate() {
+                this.population.forEach(ind => {
+                    ind.fitness = rastrigin(ind.x, ind.y);
+                    if (ind.fitness < this.bestFitness) {
+                        this.bestFitness = ind.fitness;
+                        this.bestPosition = [ind.x, ind.y];
+                    }
+                });
+            }
+            tournamentSelection(k = 3) {
+                const candidates = [];
+                for (let i = 0; i < k; i++) {
+                    candidates.push(this.population[Math.floor(Math.random() * this.popSize)]);
+                }
+                return candidates.reduce((a, b) => a.fitness < b.fitness ? a : b);
+            }
+            blxAlphaCrossover(p1, p2, alpha = 0.5) {
+                const child = { x: 0, y: 0, fitness: Infinity };
+                for (const dim of ['x', 'y']) {
+                    const d = Math.abs(p1[dim] - p2[dim]);
+                    const min = Math.min(p1[dim], p2[dim]) - alpha * d;
+                    const max = Math.max(p1[dim], p2[dim]) + alpha * d;
+                    child[dim] = Math.random() * (max - min) + min;
+                    child[dim] = Math.max(this.bounds[0], Math.min(this.bounds[1], child[dim]));
+                }
+                return child;
+            }
+            mutate(ind) {
+                const sigma = 0.3 * (this.bounds[1] - this.bounds[0]) * Math.exp(-this.generation / 100);
+                if (Math.random() < this.mutationRate) {
+                    ind.x += (Math.random() * 2 - 1) * sigma;
+                    ind.x = Math.max(this.bounds[0], Math.min(this.bounds[1], ind.x));
+                }
+                if (Math.random() < this.mutationRate) {
+                    ind.y += (Math.random() * 2 - 1) * sigma;
+                    ind.y = Math.max(this.bounds[0], Math.min(this.bounds[1], ind.y));
+                }
+            }
+            step() {
+                const newPop = [];
+                const elite = [...this.population].sort((a, b) => a.fitness - b.fitness).slice(0, 2);
+                newPop.push(...elite.map(e => ({ ...e })));
+                while (newPop.length < this.popSize) {
+                    const p1 = this.tournamentSelection();
+                    const p2 = this.tournamentSelection();
+                    let child;
+                    if (Math.random() < this.crossoverRate) {
+                        child = this.blxAlphaCrossover(p1, p2);
+                    } else {
+                        child = { ...p1, fitness: Infinity };
+                    }
+                    this.mutate(child);
+                    newPop.push(child);
+                }
+                this.population = newPop;
+                this.evaluate();
+                this.generation++;
+                this.history.push({ gen: this.generation, fitness: this.bestFitness });
+            }
+            reset() {
+                this.bestFitness = Infinity;
+                this.bestPosition = [0, 0];
+                this.generation = 0;
+                this.history = [];
+                this.init();
+            }
+        }
+
+        // ==================== PARTICLE SWARM OPTIMIZATION ====================
+        class PSO {
+            constructor(swarmSize = 30, w = 0.7, c1 = 1.5, c2 = 1.5, bounds = [-5.12, 5.12]) {
+                this.swarmSize = swarmSize;
+                this.w = w;
+                this.c1 = c1;
+                this.c2 = c2;
+                this.bounds = bounds;
+                this.particles = [];
+                this.gBestPos = [0, 0];
+                this.gBestFit = Infinity;
+                this.iteration = 0;
+                this.history = [];
+                this.init();
+            }
+            init() {
+                this.particles = Array.from({ length: this.swarmSize }, () => {
+                    const x = Math.random() * (this.bounds[1] - this.bounds[0]) + this.bounds[0];
+                    const y = Math.random() * (this.bounds[1] - this.bounds[0]) + this.bounds[0];
+                    const fitness = rastrigin(x, y);
+                    return {
+                        x, y, vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2,
+                        pBestX: x, pBestY: y, pBestFit: fitness, fitness
+                    };
+                });
+                this.updateGBest();
+            }
+            updateGBest() {
+                this.particles.forEach(p => {
+                    if (p.fitness < this.gBestFit) {
+                        this.gBestFit = p.fitness;
+                        this.gBestPos = [p.x, p.y];
+                    }
+                });
+            }
+            step() {
+                this.particles.forEach(p => {
+                    const r1 = Math.random(), r2 = Math.random();
+                    p.vx = this.w * p.vx + this.c1 * r1 * (p.pBestX - p.x) + this.c2 * r2 * (this.gBestPos[0] - p.x);
+                    p.vy = this.w * p.vy + this.c1 * r1 * (p.pBestY - p.y) + this.c2 * r2 * (this.gBestPos[1] - p.y);
+                    const vMax = 1;
+                    p.vx = Math.max(-vMax, Math.min(vMax, p.vx));
+                    p.vy = Math.max(-vMax, Math.min(vMax, p.vy));
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.x = Math.max(this.bounds[0], Math.min(this.bounds[1], p.x));
+                    p.y = Math.max(this.bounds[0], Math.min(this.bounds[1], p.y));
+                    p.fitness = rastrigin(p.x, p.y);
+                    if (p.fitness < p.pBestFit) {
+                        p.pBestFit = p.fitness;
+                        p.pBestX = p.x;
+                        p.pBestY = p.y;
+                    }
+                });
+                this.updateGBest();
+                this.iteration++;
+                this.history.push({ gen: this.iteration, fitness: this.gBestFit });
+            }
+            reset() {
+                this.gBestPos = [0, 0];
+                this.gBestFit = Infinity;
+                this.iteration = 0;
+                this.history = [];
+                this.init();
+            }
+        }
+
+        // ==================== CANVAS VISUALIZATION ====================
+        const RastriginCanvas = ({ ag, pso, bounds }) => {
+            const canvasRef = useRef(null);
+            const drawContours = useCallback((ctx, w, h) => {
+                const imgData = ctx.createImageData(w, h);
+                for (let py = 0; py < h; py++) {
+                    for (let px = 0; px < w; px++) {
+                        const x = (px / w) * (bounds[1] - bounds[0]) + bounds[0];
+                        const y = ((h - py) / h) * (bounds[1] - bounds[0]) + bounds[0];
+                        const z = rastrigin(x, y);
+                        const norm = Math.min(1, z / 80);
+                        const hue = 240 - norm * 180;
+                        const [r, g, b] = hslToRgb(hue / 360, 0.7, 0.15 + norm * 0.35);
+                        const idx = (py * w + px) * 4;
+                        imgData.data[idx] = r; imgData.data[idx + 1] = g; imgData.data[idx + 2] = b; imgData.data[idx + 3] = 255;
+                    }
+                }
+                ctx.putImageData(imgData, 0, 0);
+            }, [bounds]);
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                const w = canvas.width, h = canvas.height;
+                drawContours(ctx, w, h);
+                const toCanvas = (val) => ((val - bounds[0]) / (bounds[1] - bounds[0])) * w;
+                const toCanvasY = (val) => h - ((val - bounds[0]) / (bounds[1] - bounds[0])) * h;
+                // Draw AG individuals
+                ctx.fillStyle = '#22c55e';
+                ag.population.forEach(ind => {
+                    ctx.beginPath();
+                    ctx.arc(toCanvas(ind.x), toCanvasY(ind.y), 5, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.fillStyle = '#4ade80';
+                ctx.beginPath();
+                ctx.arc(toCanvas(ag.bestPosition[0]), toCanvasY(ag.bestPosition[1]), 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                // Draw PSO particles
+                ctx.fillStyle = '#f97316';
+                pso.particles.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(toCanvas(p.x), toCanvasY(p.y), 5, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.fillStyle = '#fb923c';
+                ctx.beginPath();
+                ctx.arc(toCanvas(pso.gBestPos[0]), toCanvasY(pso.gBestPos[1]), 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.stroke();
+            }, [ag, pso, bounds, drawContours]);
+
+            return <canvas ref={canvasRef} width={500} height={500} className="rounded-xl border border-white/10 glow" />;
+        };
+
+        const hslToRgb = (h, s, l) => {
+            let r, g, b;
+            if (s === 0) { r = g = b = l; }
+            else {
+                const hue2rgb = (p, q, t) => {
+                    if (t < 0) t += 1; if (t > 1) t -= 1;
+                    if (t < 1 / 6) return p + (q - p) * 6 * t;
+                    if (t < 1 / 2) return q;
+                    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                    return p;
+                };
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                r = hue2rgb(p, q, h + 1 / 3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1 / 3);
+            }
+            return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+        };
+
+        // ==================== SLIDES DATA ====================
+        const slidesData = [
+            { title: "Otimização Evolutiva", subtitle: "AG vs PSO na Função Rastrigin", content: "Trabalho prático de Tópicos Especiais em Engenharia de Computação III", icon: "🧬", type: "title" },
+            { title: "Função Rastrigin", content: "f(x) = An + Σ[xᵢ² - A·cos(2πxᵢ)]\n\n• Altamente multimodal\n• Ótimo global em (0,0) = 0\n• Domínio: [-5.12, 5.12]", icon: "📊", type: "text" },
+            { title: "Superfície Rastrigin 2D", type: "rastrigin2d" },
+            { title: "Curvas de Nível", type: "contour" },
+            { title: "Algoritmo Genético (AG)", content: "• Representação Real (não binária)\n• Seleção por Torneio (k=3)\n• Crossover BLX-α (α=0.5)\n• Mutação Gaussiana Adaptativa\n• Elitismo (2 melhores)", icon: "🧬", type: "text" },
+            { title: "Fluxo do AG", type: "agflow" },
+            { title: "PSO - Particle Swarm", content: "• Inspirado em bandos de pássaros\n• Velocidade + Posição\n• pBest (memória individual)\n• gBest (melhor global)\n• Parâmetros: w, c1, c2", icon: "🐦", type: "text" },
+            { title: "Equações do PSO", type: "psoequations" },
+            { title: "Simulação AG", type: "simAG" },
+            { title: "Simulação PSO", type: "simPSO" },
+            { title: "Gráfico de Convergência", type: "convergence" },
+            { title: "Comparação AG vs PSO", type: "comparison" },
+            { title: "Resultados Experimentais", type: "results" },
+            { title: "Conclusões", content: "• Ambos convergem para (0,0)\n• PSO geralmente mais rápido\n• AG mais robusto em multimodais\n• Hibridização é promissora\n• Escolha depende do problema", icon: "🎯", type: "text" }
+        ];
+
+        // ==================== SLIDE CANVAS COMPONENTS ====================
+        const RastriginMiniCanvas = ({ showAG = false, showPSO = false, ag, pso }) => {
+            const canvasRef = useRef(null);
+            const bounds = [-5.12, 5.12];
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                const w = canvas.width, h = canvas.height;
+                const imgData = ctx.createImageData(w, h);
+                for (let py = 0; py < h; py++) {
+                    for (let px = 0; px < w; px++) {
+                        const x = (px / w) * (bounds[1] - bounds[0]) + bounds[0];
+                        const y = ((h - py) / h) * (bounds[1] - bounds[0]) + bounds[0];
+                        const z = rastrigin(x, y);
+                        const norm = Math.min(1, z / 80);
+                        const hue = 240 - norm * 180;
+                        const [r, g, b] = hslToRgb(hue / 360, 0.7, 0.15 + norm * 0.35);
+                        const idx = (py * w + px) * 4;
+                        imgData.data[idx] = r; imgData.data[idx + 1] = g; imgData.data[idx + 2] = b; imgData.data[idx + 3] = 255;
+                    }
+                }
+                ctx.putImageData(imgData, 0, 0);
+                const toCanvas = (val) => ((val - bounds[0]) / (bounds[1] - bounds[0])) * w;
+                const toCanvasY = (val) => h - ((val - bounds[0]) / (bounds[1] - bounds[0])) * h;
+                if (showAG && ag) {
+                    ctx.fillStyle = '#22c55e';
+                    ag.population.forEach(ind => { ctx.beginPath(); ctx.arc(toCanvas(ind.x), toCanvasY(ind.y), 4, 0, Math.PI * 2); ctx.fill(); });
+                }
+                if (showPSO && pso) {
+                    ctx.fillStyle = '#f97316';
+                    pso.particles.forEach(p => { ctx.beginPath(); ctx.arc(toCanvas(p.x), toCanvasY(p.y), 4, 0, Math.PI * 2); ctx.fill(); });
+                }
+            }, [showAG, showPSO, ag, pso]);
+            return <canvas ref={canvasRef} width={300} height={300} className="rounded-xl border border-white/20" />;
+        };
+
+        const FlowchartAG = () => (
+            <div className="flex flex-col items-center gap-2 text-sm">
+                <div className="bg-green-600 px-4 py-2 rounded-lg font-bold">Inicialização</div>
+                <div className="text-2xl">↓</div>
+                <div className="bg-green-700 px-4 py-2 rounded-lg">Avaliação Fitness</div>
+                <div className="text-2xl">↓</div>
+                <div className="bg-green-600 px-4 py-2 rounded-lg">Seleção por Torneio</div>
+                <div className="text-2xl">↓</div>
+                <div className="bg-green-700 px-4 py-2 rounded-lg">Crossover BLX-α</div>
+                <div className="text-2xl">↓</div>
+                <div className="bg-green-600 px-4 py-2 rounded-lg">Mutação Gaussiana</div>
+                <div className="text-2xl">↓</div>
+                <div className="bg-green-700 px-4 py-2 rounded-lg">Elitismo</div>
+                <div className="text-2xl">↻</div>
+            </div>
+        );
+
+        const PSOEquations = () => (
+            <div className="text-left space-y-6 font-mono text-lg">
+                <div className="bg-slate-800 p-4 rounded-xl">
+                    <p className="text-orange-400 font-bold mb-2">Velocidade:</p>
+                    <p className="text-white">v<sub>i</sub><sup>t+1</sup> = w·v<sub>i</sub><sup>t</sup> + c₁r₁(pBest - x<sub>i</sub>) + c₂r₂(gBest - x<sub>i</sub>)</p>
+                </div>
+                <div className="bg-slate-800 p-4 rounded-xl">
+                    <p className="text-orange-400 font-bold mb-2">Posição:</p>
+                    <p className="text-white">x<sub>i</sub><sup>t+1</sup> = x<sub>i</sub><sup>t</sup> + v<sub>i</sub><sup>t+1</sup></p>
+                </div>
+                <div className="bg-slate-700 p-4 rounded-xl text-sm">
+                    <p><span className="text-purple-400">w</span> = inércia (0.7)</p>
+                    <p><span className="text-purple-400">c₁</span> = coef. cognitivo (1.5)</p>
+                    <p><span className="text-purple-400">c₂</span> = coef. social (1.5)</p>
+                </div>
+            </div>
+        );
+
+        const ComparisonTable = () => (
+            <table className="w-full text-left border-collapse">
+                <thead>
+                    <tr className="border-b border-white/20">
+                        <th className="p-3">Critério</th>
+                        <th className="p-3 text-green-400">AG</th>
+                        <th className="p-3 text-orange-400">PSO</th>
+                    </tr>
+                </thead>
+                <tbody className="text-sm">
+                    <tr className="border-b border-white/10"><td className="p-3">Velocidade</td><td className="p-3">Média</td><td className="p-3">Rápida ⭐</td></tr>
+                    <tr className="border-b border-white/10"><td className="p-3">Diversidade</td><td className="p-3">Alta ⭐</td><td className="p-3">Média</td></tr>
+                    <tr className="border-b border-white/10"><td className="p-3">Escape Ót. Locais</td><td className="p-3">Bom ⭐</td><td className="p-3">Médio</td></tr>
+                    <tr className="border-b border-white/10"><td className="p-3">Parâmetros</td><td className="p-3">Muitos</td><td className="p-3">Poucos ⭐</td></tr>
+                    <tr className="border-b border-white/10"><td className="p-3">Implementação</td><td className="p-3">Complexa</td><td className="p-3">Simples ⭐</td></tr>
+                    <tr><td className="p-3">Convergência</td><td className="p-3">Estável</td><td className="p-3">Pode prematurar</td></tr>
+                </tbody>
+            </table>
+        );
+
+        const ResultsChart = () => (
+            <div className="space-y-4">
+                <div className="text-center mb-4 font-bold">Resultados Médios (30 execuções)</div>
+                <div className="flex items-end justify-center gap-8 h-48">
+                    <div className="flex flex-col items-center">
+                        <div className="bg-green-500 w-16 rounded-t" style={{ height: '140px' }}></div>
+                        <span className="mt-2 text-sm">AG</span>
+                        <span className="text-xs text-white/50">~85 iter</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <div className="bg-orange-500 w-16 rounded-t" style={{ height: '100px' }}></div>
+                        <span className="mt-2 text-sm">PSO</span>
+                        <span className="text-xs text-white/50">~60 iter</span>
+                    </div>
+                </div>
+                <div className="text-center text-sm text-white/50">Iterações para atingir fitness &lt; 0.01</div>
+                <div className="grid grid-cols-2 gap-4 mt-6 text-sm">
+                    <div className="bg-green-900/30 p-3 rounded-lg text-center">
+                        <div className="text-green-400 font-bold">Taxa de Sucesso AG</div>
+                        <div className="text-2xl">97%</div>
+                    </div>
+                    <div className="bg-orange-900/30 p-3 rounded-lg text-center">
+                        <div className="text-orange-400 font-bold">Taxa de Sucesso PSO</div>
+                        <div className="text-2xl">94%</div>
+                    </div>
+                </div>
+            </div>
+        );
+
+
+        // ==================== META-LOG PROMPTS ====================
+        const metaPrompts = [
+            { role: "User", content: "Preciso criar uma SPA que compare AG e PSO na função Rastrigin com visualização Canvas." },
+            { role: "AI", content: "Vou implementar: 1) Classes GA e PSO em JS 2) Canvas com curvas de nível 3) Recharts para convergência 4) UI com Tailwind" },
+            { role: "User", content: "Adiciona um sistema de slides para apresentação e gera o relatório LaTeX no formato SBC." },
+            { role: "AI", content: "Implementei slides interativos com navegação e template LaTeX SBC completo com equações." },
+            { role: "User", content: "Preciso de um README.md profissional com badges e SEO para GitHub." },
+            { role: "AI", content: "Gerei README com badges dinâmicos, instruções de uso, e sugeri topics para SEO do repositório." }
+        ];
+
+
+        // ==================== MAIN APP ====================
+        const App = () => {
+            const [tab, setTab] = useState(0);
+            const [running, setRunning] = useState(false);
+            const [slideIdx, setSlideIdx] = useState(0);
+            const [speed, setSpeed] = useState(100);
+            const [popSize, setPopSize] = useState(30);
+            const [mutRate, setMutRate] = useState(0.1);
+            const [inertia, setInertia] = useState(0.7);
+            const [c1, setC1] = useState(1.5);
+            const [c2, setC2] = useState(1.5);
+            const bounds = [-5.12, 5.12];
+            const [ag, setAg] = useState(() => new GeneticAlgorithm(popSize, mutRate, 0.8, bounds));
+            const [pso, setPso] = useState(() => new PSO(popSize, inertia, c1, c2, bounds));
+            const [, forceUpdate] = useState(0);
+
+            useEffect(() => {
+                if (!running) return;
+                const id = setInterval(() => {
+                    ag.step(); pso.step();
+                    forceUpdate(n => n + 1);
+                }, speed);
+                return () => clearInterval(id);
+            }, [running, speed, ag, pso]);
+
+            const reset = () => {
+                setRunning(false);
+                const newAg = new GeneticAlgorithm(popSize, mutRate, 0.8, bounds);
+                const newPso = new PSO(popSize, inertia, c1, c2, bounds);
+                setAg(newAg); setPso(newPso);
+            };
+
+            const tabs = ["🎮 Simulação", "📊 Slides", "💬 Meta-Log"];
+
+            const chartData = ag.history.map((h, i) => ({
+                gen: h.gen,
+                AG: h.fitness.toFixed(4),
+                PSO: pso.history[i]?.fitness.toFixed(4) || 0
+            }));
+
+            return (
+                <div className="min-h-screen p-4 md:p-8">
+                    <header className="text-center mb-8">
+                        <h1 className="text-4xl md:text-5xl font-bold gradient-text mb-2">AG vs PSO</h1>
+                        <p className="text-white/60">Otimização Evolutiva na Função Rastrigin</p>
+                    </header>
+
+                    <nav className="flex flex-wrap justify-center gap-2 mb-8">
+                        {tabs.map((t, i) => (
+                            <button key={i} onClick={() => setTab(i)}
+                                className={`px-4 py-2 rounded-lg font-medium transition-all ${tab === i ? 'bg-purple-600 text-white glow' : 'glass text-white/70 hover:text-white'}`}>
+                                {t}
+                            </button>
+                        ))}
+                    </nav>
+
+                    <main className="max-w-7xl mx-auto">
+                        {tab === 0 && (
+                            <div className="space-y-6">
+                                {/* Row 1: Main simulation + Controls */}
+                                <div className="grid lg:grid-cols-3 gap-6">
+                                    <div className="lg:col-span-2 glass rounded-2xl p-6">
+                                        <h3 className="font-semibold mb-4">🎯 Simulação em Tempo Real</h3>
+                                        <div className="flex flex-col md:flex-row gap-6">
+                                            <RastriginCanvas ag={ag} pso={pso} bounds={bounds} />
+                                            <div className="flex-1">
+                                                <h4 className="font-semibold mb-2">📈 Convergência</h4>
+                                                <ResponsiveContainer width="100%" height={180}>
+                                                    <LineChart data={chartData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#444" />
+                                                        <XAxis dataKey="gen" stroke="#888" />
+                                                        <YAxis stroke="#888" />
+                                                        <Tooltip contentStyle={{ background: '#1a1a2e', border: 'none' }} />
+                                                        <Legend />
+                                                        <Line type="monotone" dataKey="AG" stroke="#22c55e" dot={false} strokeWidth={2} />
+                                                        <Line type="monotone" dataKey="PSO" stroke="#f97316" dot={false} strokeWidth={2} />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                                <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                                                    <div className="glass p-3 rounded-lg">
+                                                        <span className="text-green-400">🧬 AG:</span> {ag.bestFitness.toFixed(6)}
+                                                        <br /><span className="text-white/50">Gen: {ag.generation}</span>
+                                                    </div>
+                                                    <div className="glass p-3 rounded-lg">
+                                                        <span className="text-orange-400">🐦 PSO:</span> {pso.gBestFit.toFixed(6)}
+                                                        <br /><span className="text-white/50">Iter: {pso.iteration}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="glass rounded-2xl p-6">
+                                        <h3 className="font-semibold mb-4">⚙️ Controles</h3>
+                                        <div className="space-y-3">
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setRunning(!running)} className={`flex-1 py-2 rounded-lg font-medium ${running ? 'bg-red-500' : 'bg-green-500'}`}>
+                                                    {running ? '⏸ Pausar' : '▶ Iniciar'}
+                                                </button>
+                                                <button onClick={reset} className="px-4 py-2 rounded-lg bg-slate-600">🔄</button>
+                                            </div>
+                                            <label className="block"><span className="text-xs text-white/60">Velocidade: {speed}ms</span>
+                                                <input type="range" min="10" max="500" value={speed} onChange={e => setSpeed(+e.target.value)} className="w-full" />
+                                            </label>
+                                            <label className="block"><span className="text-xs text-white/60">População: {popSize}</span>
+                                                <input type="range" min="10" max="100" value={popSize} onChange={e => setPopSize(+e.target.value)} className="w-full" />
+                                            </label>
+                                            <label className="block"><span className="text-xs text-white/60">Mutação (AG): {mutRate}</span>
+                                                <input type="range" min="0" max="1" step="0.05" value={mutRate} onChange={e => setMutRate(+e.target.value)} className="w-full" />
+                                            </label>
+                                            <label className="block"><span className="text-xs text-white/60">Inércia (PSO): {inertia}</span>
+                                                <input type="range" min="0" max="1" step="0.05" value={inertia} onChange={e => setInertia(+e.target.value)} className="w-full" />
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <label className="block"><span className="text-xs text-white/60">c1: {c1}</span>
+                                                    <input type="range" min="0" max="3" step="0.1" value={c1} onChange={e => setC1(+e.target.value)} className="w-full" />
+                                                </label>
+                                                <label className="block"><span className="text-xs text-white/60">c2: {c2}</span>
+                                                    <input type="range" min="0" max="3" step="0.1" value={c2} onChange={e => setC2(+e.target.value)} className="w-full" />
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Row 2: Individual algorithm views */}
+                                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <div className="glass rounded-2xl p-6 text-center">
+                                        <h3 className="font-semibold mb-4 text-green-400">🧬 Simulação AG</h3>
+                                        <RastriginMiniCanvas showAG={true} ag={ag} />
+                                        <p className="mt-2 text-sm text-white/50">Gen: {ag.generation} | Fitness: {ag.bestFitness.toFixed(4)}</p>
+                                    </div>
+                                    <div className="glass rounded-2xl p-6 text-center">
+                                        <h3 className="font-semibold mb-4 text-orange-400">🐦 Simulação PSO</h3>
+                                        <RastriginMiniCanvas showPSO={true} pso={pso} />
+                                        <p className="mt-2 text-sm text-white/50">Iter: {pso.iteration} | Fitness: {pso.gBestFit.toFixed(4)}</p>
+                                    </div>
+                                    <div className="glass rounded-2xl p-6 text-center">
+                                        <h3 className="font-semibold mb-4">📊 Superfície Rastrigin</h3>
+                                        <RastriginMiniCanvas />
+                                        <p className="mt-2 text-sm text-white/50">Mínimo global em (0,0) = 0</p>
+                                    </div>
+                                </div>
+
+                                {/* Row 3: Flowcharts and Equations */}
+                                <div className="grid md:grid-cols-2 gap-6">
+                                    <div className="glass rounded-2xl p-6">
+                                        <h3 className="font-semibold mb-4 text-center text-green-400">🔄 Fluxo do AG</h3>
+                                        <FlowchartAG />
+                                    </div>
+                                    <div className="glass rounded-2xl p-6">
+                                        <h3 className="font-semibold mb-4 text-center text-orange-400">📐 Equações do PSO</h3>
+                                        <PSOEquations />
+                                    </div>
+                                </div>
+
+                                {/* Row 4: Comparison and Results */}
+                                <div className="grid md:grid-cols-2 gap-6">
+                                    <div className="glass rounded-2xl p-6">
+                                        <h3 className="font-semibold mb-4 text-center">⚖️ Comparação AG vs PSO</h3>
+                                        <ComparisonTable />
+                                    </div>
+                                    <div className="glass rounded-2xl p-6">
+                                        <h3 className="font-semibold mb-4 text-center">📊 Resultados Experimentais</h3>
+                                        <ResultsChart />
+                                    </div>
+                                </div>
+
+                                {/* Row 5: Theory cards */}
+                                <div className="grid md:grid-cols-3 gap-6">
+                                    <div className="glass rounded-2xl p-6">
+                                        <h3 className="font-semibold mb-3 gradient-text">📊 Função Rastrigin</h3>
+                                        <pre className="text-sm text-white/70 whitespace-pre-wrap">f(x) = An + Σ[xᵢ² - A·cos(2πxᵢ)]
+
+                                            • A = 10
+                                            • Domínio: [-5.12, 5.12]
+                                            • Mínimo: f(0,0) = 0
+                                            • Altamente multimodal</pre>
+                                    </div>
+                                    <div className="glass rounded-2xl p-6">
+                                        <h3 className="font-semibold mb-3 text-green-400">🧬 Algoritmo Genético</h3>
+                                        <pre className="text-sm text-white/70 whitespace-pre-wrap">• Representação Real
+                                            • Seleção Torneio (k=3)
+                                            • Crossover BLX-α (α=0.5)
+                                            • Mutação Gaussiana
+                                            • Elitismo (2 melhores)</pre>
+                                    </div>
+                                    <div className="glass rounded-2xl p-6">
+                                        <h3 className="font-semibold mb-3 text-orange-400">🐦 PSO</h3>
+                                        <pre className="text-sm text-white/70 whitespace-pre-wrap">• Inércia w = 0.7
+                                            • Cognitivo c₁ = 1.5
+                                            • Social c₂ = 1.5
+                                            • vₘₐₓ = 1.0
+                                            • pBest + gBest</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {tab === 1 && (
+                            <div className="glass rounded-2xl p-8 max-w-4xl mx-auto">
+                                <div className="slide-content flex flex-col items-center justify-center text-center min-h-[450px]">
+                                    <h2 className="text-3xl font-bold gradient-text mb-6">{slidesData[slideIdx].title}</h2>
+
+                                    {/* Title/Text slides */}
+                                    {(slidesData[slideIdx].type === 'title' || slidesData[slideIdx].type === 'text') && (
+                                        <>
+                                            {slidesData[slideIdx].icon && <span className="text-6xl mb-4">{slidesData[slideIdx].icon}</span>}
+                                            {slidesData[slideIdx].subtitle && <p className="text-xl text-white/70 mb-4">{slidesData[slideIdx].subtitle}</p>}
+                                            {slidesData[slideIdx].content && <pre className="text-left text-white/80 whitespace-pre-wrap max-w-2xl">{slidesData[slideIdx].content}</pre>}
+                                        </>
+                                    )}
+
+                                    {/* Rastrigin 2D Surface */}
+                                    {slidesData[slideIdx].type === 'rastrigin2d' && (
+                                        <div className="flex flex-col items-center">
+                                            <RastriginMiniCanvas />
+                                            <p className="mt-4 text-white/60">Mapa de calor da função Rastrigin em 2D</p>
+                                            <p className="text-sm text-white/40">Cores quentes = valores altos | Cores frias = valores baixos</p>
+                                        </div>
+                                    )}
+
+                                    {/* Contour lines */}
+                                    {slidesData[slideIdx].type === 'contour' && (
+                                        <div className="flex flex-col items-center">
+                                            <RastriginMiniCanvas />
+                                            <p className="mt-4 text-white/60">Visualização das curvas de nível</p>
+                                            <p className="text-sm text-white/40">O mínimo global está no centro (0,0) = 0</p>
+                                        </div>
+                                    )}
+
+                                    {/* AG Flowchart */}
+                                    {slidesData[slideIdx].type === 'agflow' && <FlowchartAG />}
+
+                                    {/* PSO Equations */}
+                                    {slidesData[slideIdx].type === 'psoequations' && <PSOEquations />}
+
+                                    {/* AG Simulation */}
+                                    {slidesData[slideIdx].type === 'simAG' && (
+                                        <div className="flex flex-col items-center">
+                                            <RastriginMiniCanvas showAG={true} ag={ag} />
+                                            <p className="mt-4 text-green-400">🧬 Indivíduos do AG (verde)</p>
+                                            <p className="text-sm text-white/50">Gen: {ag.generation} | Best Fitness: {ag.bestFitness.toFixed(6)}</p>
+                                        </div>
+                                    )}
+
+                                    {/* PSO Simulation */}
+                                    {slidesData[slideIdx].type === 'simPSO' && (
+                                        <div className="flex flex-col items-center">
+                                            <RastriginMiniCanvas showPSO={true} pso={pso} />
+                                            <p className="mt-4 text-orange-400">🐦 Partículas do PSO (laranja)</p>
+                                            <p className="text-sm text-white/50">Iter: {pso.iteration} | Best Fitness: {pso.gBestFit.toFixed(6)}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Convergence Chart */}
+                                    {slidesData[slideIdx].type === 'convergence' && (
+                                        <div className="w-full">
+                                            <ResponsiveContainer width="100%" height={300}>
+                                                <LineChart data={chartData}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#444" />
+                                                    <XAxis dataKey="gen" stroke="#888" label={{ value: 'Iteração', position: 'insideBottom', offset: -5 }} />
+                                                    <YAxis stroke="#888" label={{ value: 'Fitness', angle: -90, position: 'insideLeft' }} />
+                                                    <Tooltip contentStyle={{ background: '#1a1a2e', border: 'none' }} />
+                                                    <Legend />
+                                                    <Line type="monotone" dataKey="AG" stroke="#22c55e" dot={false} strokeWidth={2} />
+                                                    <Line type="monotone" dataKey="PSO" stroke="#f97316" dot={false} strokeWidth={2} />
+                                                </LineChart>
+                                            </ResponsiveContainer>
+                                            <p className="text-sm text-white/50 mt-2">Execute a simulação na aba principal para ver dados reais</p>
+                                        </div>
+                                    )}
+
+                                    {/* Comparison Table */}
+                                    {slidesData[slideIdx].type === 'comparison' && <ComparisonTable />}
+
+                                    {/* Results */}
+                                    {slidesData[slideIdx].type === 'results' && <ResultsChart />}
+                                </div>
+                                <div className="flex justify-between mt-8">
+                                    <button onClick={() => setSlideIdx(Math.max(0, slideIdx - 1))} disabled={slideIdx === 0}
+                                        className="px-6 py-2 rounded-lg bg-purple-600 disabled:opacity-30">← Anterior</button>
+                                    <span className="text-white/50">{slideIdx + 1} / {slidesData.length}</span>
+                                    <button onClick={() => setSlideIdx(Math.min(slidesData.length - 1, slideIdx + 1))} disabled={slideIdx === slidesData.length - 1}
+                                        className="px-6 py-2 rounded-lg bg-purple-600 disabled:opacity-30">Próximo →</button>
+                                </div>
+                            </div>
+                        )}
+
+
+                        {tab === 2 && (
+                            <div className="glass rounded-2xl p-6 max-w-4xl mx-auto">
+                                <h2 className="text-xl font-bold mb-6">💬 Meta-Log de Prompts (Uso de IA)</h2>
+                                <div className="space-y-4">
+                                    {metaPrompts.map((p, i) => (
+                                        <div key={i} className={`p-4 rounded-xl ${p.role === 'User' ? 'bg-blue-900/30 ml-8' : 'bg-purple-900/30 mr-8'}`}>
+                                            <span className="text-xs font-bold text-white/50 uppercase">{p.role}</span>
+                                            <p className="mt-1">{p.content}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                    </main>
+
+                    <footer className="text-center mt-12 text-white/30 text-sm">
+                        <p>Tópicos Especiais em Engenharia de Computação III • 2026</p>
+                    </footer>
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AG vs PSO - Optimization Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <div class="header-content">
+            <h1 data-i18n="title">Optimization Showdown</h1>
+            <div class="controls-main">
+                <button id="langToggle" title="Toggle Language">🇺🇸 EN</button>
+                <button id="themeToggle" title="Toggle Dark/Light Mode">🌙</button>
+                <button id="startBtn" onclick="toggleSimulation()" data-i18n="start">Start</button>
+                <button id="resetBtn" onclick="resetSimulation()" data-i18n="reset">Reset</button>
+                <span id="iteration-display" data-i18n="iteration">Iteration: 0</span>
+            </div>
+        </div>
+
+        <details class="settings-panel">
+            <summary data-i18n="settings">Model Parameters & Settings</summary>
+            <div class="settings-grid">
+                <!-- Global Settings -->
+                <div class="setting-group">
+                    <h3 data-i18n="global">Global</h3>
+                    <label>
+                        <span data-i18n="pop_size">Population</span>: <span id="val-pop">50</span>
+                        <input type="range" id="pop_size" min="10" max="200" value="50"
+                            oninput="document.getElementById('val-pop').innerText = this.value">
+                    </label>
+                    <label>
+                        <span data-i18n="delay">Delay (ms)</span>: <span id="val-delay">0</span>
+                        <input type="range" id="sim_delay" min="0" max="1000" step="50" value="0"
+                            oninput="document.getElementById('val-delay').innerText = this.value">
+                    </label>
+                </div>
+
+                <!-- Genetic Algorithm Settings -->
+                <div class="setting-group">
+                    <h3 data-i18n="ag_title">Genetic Algorithm</h3>
+                    <label>
+                        <span data-i18n="ag_mut">Mutation Rate</span>: <span id="val-mut">0.01</span>
+                        <input type="range" id="ag_mutation" min="0" max="0.1" step="0.001" value="0.01"
+                            oninput="document.getElementById('val-mut').innerText = this.value">
+                    </label>
+                    <label>
+                        <span data-i18n="ag_cross">Crossover Rate</span>: <span id="val-cross">0.7</span>
+                        <input type="range" id="ag_crossover" min="0" max="1" step="0.05" value="0.7"
+                            oninput="document.getElementById('val-cross').innerText = this.value">
+                    </label>
+                </div>
+
+                <!-- PSO Settings -->
+                <div class="setting-group">
+                    <h3 data-i18n="pso_title">Particle Swarm (PSO)</h3>
+                    <label>
+                        <span data-i18n="pso_w">Inertia (w)</span>: <span id="val-w">0.5</span>
+                        <input type="range" id="pso_w" min="0" max="1" step="0.05" value="0.5"
+                            oninput="document.getElementById('val-w').innerText = this.value">
+                    </label>
+                    <label>
+                        <span data-i18n="pso_c1">Cognitive (c1)</span>: <span id="val-c1">1.5</span>
+                        <input type="range" id="pso_c1" min="0" max="4" step="0.1" value="1.5"
+                            oninput="document.getElementById('val-c1').innerText = this.value">
+                    </label>
+                    <label>
+                        <span data-i18n="pso_c2">Social (c2)</span>: <span id="val-c2">1.5</span>
+                        <input type="range" id="pso_c2" min="0" max="4" step="0.1" value="1.5"
+                            oninput="document.getElementById('val-c2').innerText = this.value">
+                    </label>
+                </div>
+            </div>
+        </details>
+
+        <main>
+            <!-- Genetic Algorithm Card -->
+            <div class="card algorithm-card">
+                <div class="card-header">
+                    <h2 data-i18n="ag_title">Genetic Algorithm</h2>
+                    <span class="badge ag-badge">AG</span>
+                </div>
+                <div class="canvas-container">
+                    <div id="agPlot" style="width:100%; height:100%;"></div>
+                </div>
+                <div class="stats">
+                    <div class="stat-item">
+                        <span class="label" data-i18n="best_score">Best Score</span>
+                        <span class="value" id="ag-score">Inf</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PSO Card -->
+            <div class="card algorithm-card">
+                <div class="card-header">
+                    <h2 data-i18n="pso_title">Particle Swarm</h2>
+                    <span class="badge pso-badge">PSO</span>
+                </div>
+                <div class="canvas-container">
+                    <div id="psoPlot" style="width:100%; height:100%;"></div>
+                </div>
+                <div class="stats">
+                    <div class="stat-item">
+                        <span class="label" data-i18n="best_score">Best Score</span>
+                        <span class="value" id="pso-score">Inf</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <section class="charts-section">
+            <div class="card chart-card">
+                <h3 data-i18n="convergence">Convergence Comparison</h3>
+                <div id="convergencePlot" style="width:100%; height:100%;"></div>
+            </div>
+        </section>
+    </div>
+    <script src="/static/js/main.js"></script>
+</body>
+
+</html>
