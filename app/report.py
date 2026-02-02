@@ -2,7 +2,7 @@
 Módulo de Geração de Relatório LaTeX/PDF Completo
 
 Gera relatórios acadêmicos completos a partir dos resultados da simulação AG vs PSO,
-seguindo o formato do template original relatorio.tex.
+seguindo o template SBC (2025-2026).
 """
 
 import subprocess
@@ -11,6 +11,53 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+
+TEMPLATE_DIR = Path(__file__).resolve().parent / "report_templates"
+TEMPLATE_FILES = ("sbc-template.sty", "caption2.sty")
+TEMPLATE_SOURCE_URL = "https://github.com/uefs/sbc-template-latex"
+
+AI_MODELS = [
+    "gemini 3 pro",
+    "claude opus 4.5",
+    "gpt-5.2-codex",
+]
+
+AI_PROMPTS = [
+    "Gere imagens de dashboard minimalista moderno realista com AG vs Enxame de Partículas",
+    'Gostei do "clean minimalist bright dashboard UI design, comparison between Genetic Algorithm (AG) and Particle Swarm (PSO), elegant charts, soft shadows, realistic render, data visualization, high end interface, 8k" implemente ele em html css javascript com animacoes, e a parte logica implemente em python, conecte tudo com fastapi no python 3.14.2 freetreat',
+    "Proponha melhorias no front end do dashboard",
+    "quero poder ajustar os graficos 3d diretamente na interface, e eles por padrao estao tornando dificil ver as particulas",
+    "tem que ser possivel trocar de otimizacao, ou seja pode ser de maximizacao, minimizacao ou outro",
+    "Quero poder trocar a funcao de interesse, para isso preciso de um campo para trocar que possua um teclado virtual para funcoes matematicas, alem disso corrija os : que estao ficando quebrados onde sao usados,Melhore os botoes de trocar de tema para que tenha uma animacao de formato circular na tela toda de troca de tema quando forem clicados, os botoes devem ser modernos, e os botoes de troca de traducao devem ser mais modernos",
+    "Quero poder trocar a funcao de interesse, para isso preciso de um campo para trocar que possua um teclado virtual para funcoes matematicas, alem disso corrija os : que estao ficando quebrados onde sao usados",
+    "refaça essa parte da expressao matematica por completo para usar corretamente o mathjs e o teclado deveria ser virtual",
+    "o teclado virtual deveria ser completo o que vem padrao do mathjs",
+    "A funcao padrao que deve vir no teclado é a da imagem",
+    "não está dando para resetar",
+    "Ainda não é possivel resetar ao estado inicial, de poder voltar a qualquer iteracao",
+    'syntax error in part "∗(x1^2+x2^2))^2)" (char 44',
+]
+
+
+def normalize_prompt(text: str) -> str:
+    """Normaliza caracteres dos prompts para evitar erros no LaTeX."""
+    if not text:
+        return ""
+    return text.replace("∗", "*")
+
+
+def copy_template_files(dest_dir: Path) -> Optional[str]:
+    """Copia os arquivos do template SBC para o diretório de compilação."""
+    missing = []
+    for filename in TEMPLATE_FILES:
+        src = TEMPLATE_DIR / filename
+        if not src.exists():
+            missing.append(filename)
+            continue
+        shutil.copy(src, dest_dir / filename)
+    if missing:
+        return "Arquivos do template SBC ausentes: " + ", ".join(missing)
+    return None
 
 
 def find_latex_compiler() -> Optional[str]:
@@ -230,27 +277,28 @@ def generate_latex(data: dict) -> str:
         winner_text = "ambos os algoritmos obtiveram desempenho similar"
         winner_analysis = f"Ambos convergiram para valores próximos: AG={ag_best_str}, PSO={pso_best_str}."
 
+    ai_models_text = "\n".join(
+        [f"\\item {escape_latex(model)}" for model in AI_MODELS]
+    )
+    ai_prompts_text = "\n".join(
+        [f"\\item {escape_latex(normalize_prompt(prompt))}" for prompt in AI_PROMPTS]
+    )
+
     latex_template = (
-        r"""\documentclass[12pt, twocolumn]{article}
+        r"""\documentclass[12pt]{article}
+\usepackage{sbc-template}
 \usepackage[utf8]{inputenc}
 \usepackage[brazil]{babel}
-\usepackage{graphicx}
-\usepackage{url}
+\usepackage{graphicx,url}
 \usepackage{amsmath}
 \usepackage{amssymb}
-\usepackage{geometry}
 \usepackage{float}
 \usepackage{booktabs}
 \usepackage{hyperref}
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{fancyvrb}
-\usepackage{times} % Fonte Times New Roman (SBC)
-
-% Configuração SBC-like
-\geometry{a4paper, top=2.5cm, bottom=2.5cm, left=1.5cm, right=1.5cm, columnsep=1.0cm}
-\setlength{\parindent}{1.25cm}
-\setlength{\parskip}{0.0em} 
+\sloppy
 
 % Configuração de código
 \lstset{
@@ -267,41 +315,42 @@ def generate_latex(data: dict) -> str:
     columns=flexible
 }
 
-\title{\textbf{Comparação entre Algoritmo Genético e PSO\\na Otimização de Funções Multimodais}}
-\author{João da Cruz de Natividade e Silva Neto\\
-\small UFPA -- Universidade Federal do Pará\\
-\small Gerado em: """
+\title{Comparação entre Algoritmo Genético e PSO\\na Otimização de Funções Multimodais}
+\author{João da Cruz de Natividade e Silva Neto}
+
+\address{UFPA -- Universidade Federal do Pará\\
+Gerado em: """
         + date_str
         + r"""}
-\date{}
 
 \begin{document}
 
-\twocolumn[
-  \begin{@twocolumnfalse}
-    \maketitle
-    \begin{abstract}
-    Este relatório apresenta uma análise comparativa detalhada entre o Algoritmo Genético (AG) 
-    com representação real e a Otimização por Enxame de Partículas (PSO) aplicados à otimização
-    de funções multimodais. A simulação foi executada com """
+\maketitle
+
+\begin{abstract}
+Este relatório apresenta uma análise comparativa detalhada entre o Algoritmo Genético (AG) 
+com representação real e a Otimização por Enxame de Partículas (PSO) aplicados à otimização
+de funções multimodais. A simulação foi executada com """
         + str(analysis["iterations"])
         + r""" iterações,
-    utilizando uma população de """
+utilizando uma população de """
         + str(pop_size)
         + r""" indivíduos/partículas. Os resultados demonstram que
-    """
+"""
         + winner_text
         + r""", com o AG atingindo """
         + ag_best_str
         + r""" e o PSO atingindo """
         + pso_best_str
         + r""".
-    Este documento inclui a fundamentação teórica, detalhes de implementação, parâmetros utilizados,
-    análise de convergência e conclusões baseadas nos dados experimentais obtidos.
-    \vspace{1cm}
-    \end{abstract}
-  \end{@twocolumnfalse}
-]
+Este documento inclui a fundamentação teórica, detalhes de implementação, parâmetros utilizados,
+análise de convergência e conclusões baseadas nos dados experimentais obtidos.
+\end{abstract}
+
+\begin{resumo}
+Este artigo registra a implementação da simulação AG vs PSO e inclui a rastreabilidade dos prompts
+e modelos de IA utilizados durante o desenvolvimento.
+\end{resumo}
 
 %==============================================================================
 \section{Introdução}
@@ -464,6 +513,55 @@ O sistema segue uma arquitetura cliente-servidor com comunicação bidirecional:
     \item O estado atualizado (populações, fitness, histórico) é enviado ao cliente
     \item O cliente renderiza as visualizações 3D e gráficos de convergência
 \end{enumerate}
+
+\subsection{Fluxo de Dados e Integração}
+
+\begin{itemize}
+    \item Interface web coleta parâmetros (população, mutação, crossover, inércia, modo de otimização e função objetivo).
+    \item O backend converte a expressão via \texttt{numexpr} e valida símbolos permitidos.
+    \item As iterações são executadas com envio incremental do estado via WebSocket.
+    \item O relatório é gerado como \LaTeX{} e compilado para PDF quando o compilador está disponível.
+\end{itemize}
+
+\subsection{Detalhes dos Algoritmos}
+
+\textbf{Algoritmo Genético (AG).} Implementado com seleção por torneio, crossover de ponto único e mutação uniforme:
+\begin{lstlisting}[caption={Ciclo do AG}, basicstyle=\ttfamily\scriptsize]
+scores = update_best()
+selected = tournament_selection(scores)
+next_pop = crossover(selected)
+mutation()
+record_state()
+\end{lstlisting}
+
+\textbf{PSO.} Atualiza velocidades e posições considerando inércia, componentes cognitivo e social:
+\begin{lstlisting}[caption={Ciclo do PSO}, basicstyle=\ttfamily\scriptsize]
+r1, r2 = random_coeffs()
+v = w*v + c1*r1*(pbest-x) + c2*r2*(gbest-x)
+x = x + v
+clip_bounds(x)
+record_state()
+\end{lstlisting}
+
+\subsection{Rastreamento de IA}
+
+Os modelos de IA utilizados para suporte à implementação e geração de código foram:
+\begin{itemize}
+"""
+        + ai_models_text
+        + r"""
+\end{itemize}
+
+Prompts utilizados:
+\begin{itemize}
+"""
+        + ai_prompts_text
+        + r"""
+\end{itemize}
+
+Template SBC (2025-2026) utilizado: \url{"""
+        + TEMPLATE_SOURCE_URL
+        + r"""}.
 
 \subsection{Função Rastrigin (Padrão)}
 
@@ -693,6 +791,9 @@ def compile_to_pdf(tex_content: str) -> tuple[Optional[bytes], str]:
     with tempfile.TemporaryDirectory() as temp_dir:
         tex_path = Path(temp_dir) / "report.tex"
         pdf_path = Path(temp_dir) / "report.pdf"
+        template_message = copy_template_files(Path(temp_dir))
+        if template_message:
+            return None, template_message
 
         # Escrever arquivo .tex
         tex_path.write_text(tex_content, encoding="utf-8")
