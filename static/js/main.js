@@ -1168,13 +1168,13 @@ async function generatePdfReport() {
         function checkSpace(height) {
             if (cursorY + height > pageHeight - marginBottom) {
                 if (currentCol === 1) {
-                    // Move to column 2
+                    // Move from column 1 to column 2
                     currentCol = 2;
                     // On first page, column 2 starts at columnStartY (after abstract)
                     // On other pages, column 2 starts at marginTop
                     cursorY = isFirstPage ? columnStartY : marginTop;
                 } else {
-                    // Move to next page
+                    // currentCol === 2, move to next page, column 1
                     doc.addPage();
                     currentCol = 1;
                     isFirstPage = false;
@@ -1186,6 +1186,20 @@ async function generatePdfReport() {
 
         function getCurrentX() {
             return currentCol === 1 ? col1X : col2X;
+        }
+
+        // Force move to next column (useful to balance columns)
+        function nextColumn() {
+            if (currentCol === 1) {
+                currentCol = 2;
+                cursorY = isFirstPage ? columnStartY : marginTop;
+            } else {
+                doc.addPage();
+                currentCol = 1;
+                isFirstPage = false;
+                columnStartY = marginTop;
+                cursorY = marginTop;
+            }
         }
 
         // --- Content Helpers ---
@@ -1414,6 +1428,9 @@ async function generatePdfReport() {
         addSectionHeading('3. Configuração Experimental');
 
         // We use autoTable but constrained to column width (SBC style: simple grid)
+        // Check if table fits in current column (estimate ~6 rows * 6mm = ~36mm)
+        checkSpace(40);
+        
         const table1Y = cursorY;
         doc.autoTable({
             startY: table1Y,
@@ -1434,21 +1451,17 @@ async function generatePdfReport() {
         });
 
         // Update cursorY based on table height
-        const tableHeight = doc.lastAutoTable.finalY - table1Y;
         cursorY = doc.lastAutoTable.finalY + 5;
 
         // Add 3D Plots
         addImage(agImg, 'População Final (AG)', 50);
         addImage(psoImg, 'População Final (PSO)', 50);
 
-        // Hack: if autoTable broke page, we need to detect and handle layout state. 
-        // jsPDF autoTable page break handling with manual columns is tricky.
-        // Assuming small table fits.
-
         // 4. Resultados
         addSectionHeading('4. Resultados Experimentais');
 
         addSubsectionHeading('4.1 Resumo');
+        checkSpace(25); // Estimate table height
         doc.autoTable({
             startY: cursorY,
             head: [['Métrica', 'AG', 'PSO']],
@@ -1484,6 +1497,9 @@ async function generatePdfReport() {
             convRows.push([i, data.history_ag[i].toFixed(4), data.history_pso[i].toFixed(4)]);
         }
 
+        // Check space for convergence table (estimate rows * 5mm + header)
+        checkSpace(convRows.length * 5 + 10);
+        
         doc.autoTable({
             startY: cursorY,
             head: [['Iteração', 'AG', 'PSO']],
@@ -1496,19 +1512,9 @@ async function generatePdfReport() {
         });
         cursorY = doc.lastAutoTable.finalY + 5;
 
-        CHECK_FOR_PAGE_BREAK_AFTER_TABLE: {
-            // If table went too low, move to next column/page manual check
-            if (cursorY > pageHeight - marginBottom) {
-                if (currentCol === 1) {
-                    currentCol = 2;
-                    cursorY = columnStartY;
-                } else {
-                    doc.addPage();
-                    currentCol = 1;
-                    columnStartY = marginTop;
-                    cursorY = columnStartY;
-                }
-            }
+        // Check if we need to move to next column after table
+        if (cursorY > pageHeight - marginBottom) {
+            nextColumn();
         }
 
         // 5. Implementação
