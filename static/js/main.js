@@ -1159,6 +1159,7 @@ async function generatePdfReport() {
         let currentCol = 1; // 1 or 2
         let cursorY = marginTop;
         let columnStartY = marginTop; // Track where columns should start on current page
+        let isFirstPage = true; // Track if we're on the first page
 
         doc.setFont('times', 'normal'); // SBC uses Times
 
@@ -1167,13 +1168,18 @@ async function generatePdfReport() {
         function checkSpace(height) {
             if (cursorY + height > pageHeight - marginBottom) {
                 if (currentCol === 1) {
+                    // Move to column 2
                     currentCol = 2;
-                    cursorY = columnStartY;
+                    // On first page, column 2 starts at columnStartY (after abstract)
+                    // On other pages, column 2 starts at marginTop
+                    cursorY = isFirstPage ? columnStartY : marginTop;
                 } else {
+                    // Move to next page
                     doc.addPage();
                     currentCol = 1;
-                    columnStartY = marginTop; // Reset to top for new pages
-                    cursorY = columnStartY;
+                    isFirstPage = false;
+                    columnStartY = marginTop; // Reset for new pages
+                    cursorY = marginTop;
                 }
             }
         }
