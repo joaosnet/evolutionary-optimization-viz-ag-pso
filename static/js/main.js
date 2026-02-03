@@ -1131,15 +1131,23 @@ async function generatePdfReport() {
         const convImg = await Plotly.toImage(document.getElementById('convergencePlot'), { format: 'png', width: 600, height: 350 });
 
         const doc = new jsPDF();
+        
+        // Set PDF metadata
+        doc.setProperties({
+            title: 'Comparação entre AG e PSO - Relatório SBC',
+            subject: 'Relatório Técnico - Template SBC',
+            author: 'João da Cruz de Natividade e Silva Neto',
+            creator: 'Evolutionary Optimization Viz'
+        });
 
-        // --- SBC Layout Constants ---
-        const pageWidth = doc.internal.pageSize.width;   // 210
-        const pageHeight = doc.internal.pageSize.height; // 297
-        const marginTop = 25;
-        const marginBottom = 25;
-        const marginLeft = 15;
-        const marginRight = 15;
-        const colGap = 10;
+        // --- SBC Layout Constants (based on sbc-template.sty) ---
+        const pageWidth = doc.internal.pageSize.width;   // 210mm
+        const pageHeight = doc.internal.pageSize.height; // 297mm
+        const marginTop = 30;      // SBC: ~3cm top
+        const marginBottom = 20;   // SBC: ~2cm bottom
+        const marginLeft = 30;     // SBC: ~3cm left
+        const marginRight = 20;    // SBC: ~2cm right
+        const colGap = 8;          // Gap between columns
 
         // Column Calculations
         const contentWidth = pageWidth - marginLeft - marginRight;
@@ -1289,67 +1297,95 @@ async function generatePdfReport() {
 
         // --- Document Generation ---
 
-        // 1. Title Area (Full Width)
-        addFullWidthText('Comparação entre Algoritmo Genético e PSO', 16, 'bold', 'center');
-        cursorY -= 2; // tight
-        addFullWidthText('na Otimização de Funções Multimodais', 14, 'bold', 'center');
+        // 1. Title Area (Full Width - SBC Style: 14pt bold centered)
+        doc.setFont('times', 'bold');
+        doc.setFontSize(14);
+        doc.text('Comparação entre Algoritmo Genético e PSO', pageWidth / 2, cursorY, { align: 'center' });
+        cursorY += 6;
+        doc.text('na Otimização de Funções Multimodais', pageWidth / 2, cursorY, { align: 'center' });
+        cursorY += 12;
 
-        cursorY += 4;
-        addFullWidthText('João da Cruz de Natividade e Silva Neto', 12, 'normal', 'center');
-        cursorY -= 4;
-        addFullWidthText('UFPA - Universidade Federal do Pará', 10, 'italic', 'center');
-        cursorY -= 4;
-        addFullWidthText('Tópicos Especiais em Engenharia de Computação III', 9, 'italic', 'center');
-        cursorY -= 4;
-        addFullWidthText('joao.silva.neto@itec.ufpa.br', 9, 'normal', 'center');
-
-        cursorY += 2;
-        doc.setLineWidth(0.5);
-        doc.line(marginLeft, cursorY, marginLeft + contentWidth, cursorY);
+        // Author: 12pt normal centered
+        doc.setFont('times', 'normal');
+        doc.setFontSize(12);
+        doc.text('João da Cruz de Natividade e Silva Neto', pageWidth / 2, cursorY, { align: 'center' });
         cursorY += 5;
 
-        // Abstract (Full Width simulation using indented margins or just full width? 
-        // SBC Abstract is usually just a bold paragraph)
-        // Let's keep it simple: Full width abstract for readability, then columns.
+        // Institution: 12pt italic centered
+        doc.setFont('times', 'italic');
+        doc.text('UFPA – Universidade Federal do Pará', pageWidth / 2, cursorY, { align: 'center' });
+        cursorY += 8;
 
-        doc.setFont('times', 'bold');
-        doc.setFontSize(11);
-        const absTitle = doc.splitTextToSize('Resumo. ', contentWidth);
-        doc.text(absTitle[0], marginLeft, cursorY);
-        const titleWidth = doc.getTextWidth('Resumo. ');
+        // Address: 10pt normal centered
+        doc.setFont('times', 'normal');
+        doc.setFontSize(10);
+        doc.text('Tópicos Especiais em Engenharia de Computação III', pageWidth / 2, cursorY, { align: 'center' });
+        cursorY += 4;
+        doc.text('joao.silva.neto@itec.ufpa.br', pageWidth / 2, cursorY, { align: 'center' });
+        cursorY += 10;
 
-        // Construct abstract text
+        // 2. Resumo (SBC Style: "Resumo." bold + text italic, indented)
+        const absIndent = 8; // Extra margin for abstract
+        const absWidth = contentWidth - (absIndent * 2);
+
+        // Construct dynamic abstract text
         const maxIter = Math.max(data.ag.iteration, data.pso.iteration);
         let winnerText = "ambos os algoritmos obtiveram desempenho similar";
+        let winnerTextEN = "both algorithms performed similarly";
         const agBest = data.ag.best_score || 0;
         const psoBest = data.pso.best_score || 0;
 
         if (data.params.optimization_mode === 'max') {
-            if (agBest > psoBest) winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho";
-            else if (psoBest > agBest) winnerText = "o PSO obteve melhor desempenho";
+            if (agBest > psoBest) { winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho"; winnerTextEN = "the Genetic Algorithm (GA) outperformed PSO"; }
+            else if (psoBest > agBest) { winnerText = "o PSO obteve melhor desempenho"; winnerTextEN = "PSO outperformed the Genetic Algorithm"; }
         } else if (data.params.optimization_mode === 'min') {
-            if (agBest < psoBest) winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho";
-            else if (psoBest < agBest) winnerText = "o PSO obteve melhor desempenho";
+            if (agBest < psoBest) { winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho"; winnerTextEN = "the Genetic Algorithm (GA) outperformed PSO"; }
+            else if (psoBest < agBest) { winnerText = "o PSO obteve melhor desempenho"; winnerTextEN = "PSO outperformed the Genetic Algorithm"; }
         } else { // Target
             const agDiff = Math.abs(agBest - data.params.target_value);
             const psoDiff = Math.abs(psoBest - data.params.target_value);
-            if (agDiff < psoDiff) winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho";
-            else if (psoDiff < agDiff) winnerText = "o PSO obteve melhor desempenho";
+            if (agDiff < psoDiff) { winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho"; winnerTextEN = "the Genetic Algorithm (GA) outperformed PSO"; }
+            else if (psoDiff < agDiff) { winnerText = "o PSO obteve melhor desempenho"; winnerTextEN = "PSO outperformed the Genetic Algorithm"; }
         }
 
-        const absText = `Este relatório apresenta uma análise comparativa entre o Algoritmo Genético (AG) e a Otimização por Enxame de Partículas (PSO). A simulação foi executada com ${maxIter} iterações e população de ${data.params.pop_size} indivíduos. Os resultados demonstram que ${winnerText}.`;
+        const absTextPT = `Este trabalho apresenta uma análise comparativa entre o Algoritmo Genético (AG) com representação real e a Otimização por Enxame de Partículas (PSO) aplicados à otimização de funções multimodais. A simulação foi executada com ${maxIter} iterações, utilizando uma população de ${data.params.pop_size} indivíduos/partículas. Os resultados demonstram que ${winnerText}. O projeto foi desenvolvido com assistência de Inteligência Artificial (IA).`;
 
-        doc.setFont('times', 'italic'); // Abstract body often italic
+        // RESUMO
+        doc.setFont('times', 'bold');
+        doc.setFontSize(12);
+        doc.text('Resumo.', marginLeft + absIndent, cursorY);
+        
+        doc.setFont('times', 'italic');
         doc.setFontSize(10);
+        const splitAbsPT = doc.splitTextToSize(absTextPT, absWidth);
+        doc.text(splitAbsPT, marginLeft + absIndent, cursorY + 5);
+        cursorY += (splitAbsPT.length * 4) + 12;
 
-        // Trick to put text right after "Resumo."
-        const splitAbs = doc.splitTextToSize(absText, contentWidth);
-        // First line logic is annoying, simpler to just print below or full width block
-        // Let's print full width block
-        doc.text(splitAbs, marginLeft, cursorY + 5);
-        cursorY += (splitAbs.length * 4.5) + 12;
+        // Keywords PT
+        doc.setFont('times', 'normal');
+        doc.setFontSize(10);
+        doc.text('Palavras-chave: Algoritmo Genético, PSO, Otimização, Inteligência Artificial', marginLeft + absIndent, cursorY);
+        cursorY += 10;
 
-        // Lock in the start Y for columns on Page 1 so col 2 starts below abstract
+        // ABSTRACT
+        const absTextEN = `This paper presents a comparative analysis between the real-coded Genetic Algorithm (GA) and Particle Swarm Optimization (PSO) applied to multimodal function optimization. The simulation ran for ${maxIter} iterations with a population of ${data.params.pop_size} individuals/particles. Results show that ${winnerTextEN}. This project was developed with AI assistance.`;
+
+        doc.setFont('times', 'bold');
+        doc.setFontSize(12);
+        doc.text('Abstract.', marginLeft + absIndent, cursorY);
+        
+        doc.setFont('times', 'italic');
+        doc.setFontSize(10);
+        const splitAbsEN = doc.splitTextToSize(absTextEN, absWidth);
+        doc.text(splitAbsEN, marginLeft + absIndent, cursorY + 5);
+        cursorY += (splitAbsEN.length * 4) + 12;
+
+        // Keywords EN
+        doc.setFont('times', 'normal');
+        doc.text('Keywords: Genetic Algorithm, PSO, Optimization, Artificial Intelligence', marginLeft + absIndent, cursorY);
+        cursorY += 15;
+
+        // Lock column start after abstracts
         columnStartY = cursorY;
 
         // --- Start Columns ---
@@ -1371,7 +1407,7 @@ async function generatePdfReport() {
         // 3. Configuração Experimental (Table)
         addSectionHeading('3. Configuração Experimental');
 
-        // We use autoTable but constrained to column width
+        // We use autoTable but constrained to column width (SBC style: simple grid)
         const table1Y = cursorY;
         doc.autoTable({
             startY: table1Y,
@@ -1381,12 +1417,12 @@ async function generatePdfReport() {
                 ['Mutação', data.params.ag_mutation, '--'],
                 ['Crossover', data.params.ag_crossover, '--'],
                 ['Inércia (w)', '--', data.params.pso_w],
-                ['Cognitivo', '--', data.params.pso_c1],
-                ['Social', '--', data.params.pso_c2]
+                ['Cognitivo (c1)', '--', data.params.pso_c1],
+                ['Social (c2)', '--', data.params.pso_c2]
             ],
             theme: 'grid',
-            headStyles: { fillColor: [50, 50, 50], fontSize: 8 },
-            styles: { fontSize: 8, font: 'times' },
+            headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, lineWidth: 0.3 },
+            styles: { fontSize: 9, font: 'times', cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.2 },
             margin: { left: getCurrentX() },
             tableWidth: colWidth
         });
@@ -1411,12 +1447,12 @@ async function generatePdfReport() {
             startY: cursorY,
             head: [['Métrica', 'AG', 'PSO']],
             body: [
-                ['Melhor', (data.ag.best_score?.toFixed(6) || 'N/A'), (data.pso.best_score?.toFixed(6) || 'N/A')],
+                ['Melhor Fitness', (data.ag.best_score?.toFixed(6) || 'N/A'), (data.pso.best_score?.toFixed(6) || 'N/A')],
                 ['Iterações', data.ag.iteration, data.pso.iteration]
             ],
-            theme: 'striped',
-            headStyles: { fillColor: [50, 50, 50], fontSize: 8 },
-            styles: { fontSize: 8, font: 'times' },
+            theme: 'grid',
+            headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, lineWidth: 0.3 },
+            styles: { fontSize: 9, font: 'times', cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.2 },
             margin: { left: getCurrentX() },
             tableWidth: colWidth
         });
@@ -1444,11 +1480,11 @@ async function generatePdfReport() {
 
         doc.autoTable({
             startY: cursorY,
-            head: [['Iter', 'AG', 'PSO']],
+            head: [['Iteração', 'AG', 'PSO']],
             body: convRows,
-            theme: 'plain',
-            headStyles: { fillColor: [50, 50, 50], textColor: 255, fontSize: 8 },
-            styles: { fontSize: 7, font: 'times' },
+            theme: 'grid',
+            headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8, lineWidth: 0.3 },
+            styles: { fontSize: 8, font: 'times', cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.2 },
             margin: { left: getCurrentX() },
             tableWidth: colWidth
         });
@@ -1504,15 +1540,23 @@ async function generatePdfReport() {
         addSectionHeading('8. Disponibilidade');
         addText('A simulação interativa está disponível em:');
         doc.setTextColor(0, 0, 255);
-        addText('https://joaosnet.github.io/\nevolutionary-optimization-viz-ag-pso/', 9, 'normal');
+        addText('https://joaosnet.github.io/evolutionary-optimization-viz-ag-pso/', 9, 'normal');
         doc.setTextColor(0, 0, 0);
 
-        // Info
-        cursorY += 5;
+        // 9. Referências (SBC Style)
+        addSectionHeading('Referências');
+        doc.setFontSize(9);
+        addText('[1] Holland, J. H. (1992). Adaptation in Natural and Artificial Systems. MIT Press.', 9);
+        addText('[2] Kennedy, J. and Eberhart, R. (1995). Particle Swarm Optimization. In IEEE Intl. Conf. on Neural Networks.', 9);
+        addText('[3] Goldberg, D. E. (1989). Genetic Algorithms in Search, Optimization, and Machine Learning. Addison-Wesley.', 9);
+        addText('[4] Eberhart, R. C. and Shi, Y. (2001). Particle swarm optimization: developments, applications and resources. In Congress on Evolutionary Computation.', 9);
+
+        // Footer: Data geração
+        cursorY += 10;
         doc.setFontSize(8);
         doc.setTextColor(100);
-        addText(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 8, 'italic');
-
+        addText(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 8, 'italic');
+        doc.setTextColor(0, 0, 0);
 
         // Save PDF
         doc.save('relatorio_sbc_ag_pso.pdf');
