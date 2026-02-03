@@ -2,7 +2,7 @@
 Módulo de Geração de Relatório LaTeX/PDF Completo
 
 Gera relatórios acadêmicos completos a partir dos resultados da simulação AG vs PSO,
-seguindo o template SBC (2025-2026).
+seguindo o template SBC (2025-2026) - Padronizado com T1.
 """
 
 import subprocess
@@ -17,25 +17,16 @@ TEMPLATE_FILES = ("sbc-template.sty", "caption2.sty")
 TEMPLATE_SOURCE_URL = "https://github.com/uefs/sbc-template-latex"
 
 AI_MODELS = [
-    "gemini 3 pro",
-    "claude opus 4.5",
-    "gpt-5.2-codex",
+    "Claude Opus 4.5 (Thinking) via Antigravity",
 ]
 
 AI_PROMPTS = [
     "Gere imagens de dashboard minimalista moderno realista com AG vs Enxame de Partículas",
     'Gostei do "clean minimalist bright dashboard UI design, comparison between Genetic Algorithm (AG) and Particle Swarm (PSO), elegant charts, soft shadows, realistic render, data visualization, high end interface, 8k" implemente ele em html css javascript com animacoes, e a parte logica implemente em python, conecte tudo com fastapi no python 3.14.2 freetreat',
     "Proponha melhorias no front end do dashboard",
-    "quero poder ajustar os graficos 3d diretamente na interface, e eles por padrao estao tornando dificil ver as particulas",
+    "quero poder ajustar os graficos 3d diretamente na interface",
     "tem que ser possivel trocar de otimizacao, ou seja pode ser de maximizacao, minimizacao ou outro",
-    "Quero poder trocar a funcao de interesse, para isso preciso de um campo para trocar que possua um teclado virtual para funcoes matematicas, alem disso corrija os : que estao ficando quebrados onde sao usados,Melhore os botoes de trocar de tema para que tenha uma animacao de formato circular na tela toda de troca de tema quando forem clicados, os botoes devem ser modernos, e os botoes de troca de traducao devem ser mais modernos",
-    "Quero poder trocar a funcao de interesse, para isso preciso de um campo para trocar que possua um teclado virtual para funcoes matematicas, alem disso corrija os : que estao ficando quebrados onde sao usados",
-    "refaça essa parte da expressao matematica por completo para usar corretamente o mathjs e o teclado deveria ser virtual",
-    "o teclado virtual deveria ser completo o que vem padrao do mathjs",
-    "A funcao padrao que deve vir no teclado é a da imagem",
-    "não está dando para resetar",
-    "Ainda não é possivel resetar ao estado inicial, de poder voltar a qualquer iteracao",
-    'syntax error in part "∗(x1^2+x2^2))^2)" (char 44',
+    "Quero poder trocar a funcao de interesse, para isso preciso de um campo para trocar que possua um teclado virtual para funcoes matematicas",
 ]
 
 
@@ -219,6 +210,7 @@ def analyze_results(history_ag: list, history_pso: list) -> dict:
 def generate_latex(data: dict) -> str:
     """
     Gera código LaTeX completo e acadêmico a partir dos dados da simulação.
+    Segue o padrão do template T1 (SBC).
     """
     params = data.get("params", {})
     ag_result = data.get("ag", {})
@@ -255,7 +247,6 @@ def generate_latex(data: dict) -> str:
         if function_expr
         else r"10n + \sum_{i=1}^{n}\left[x_i^2 - 10\cos(2\pi x_i)\right]"
     )
-    date_str = datetime.now().strftime("%d de %B de %Y")
 
     mode_text = {
         "max": "Maximização",
@@ -281,23 +272,26 @@ def generate_latex(data: dict) -> str:
         [f"\\item {escape_latex(model)}" for model in AI_MODELS]
     )
     ai_prompts_text = "\n".join(
-        [f"\\item {escape_latex(normalize_prompt(prompt))}" for prompt in AI_PROMPTS]
+        [f"\\item {escape_latex(normalize_prompt(prompt)[:100])}..." for prompt in AI_PROMPTS[:5]]
     )
 
+    # Template padronizado com T1
     latex_template = (
         r"""\documentclass[12pt]{article}
 \usepackage{sbc-template}
 \usepackage[utf8]{inputenc}
-\usepackage[brazil]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{float}
 \usepackage{graphicx,url}
 \usepackage{amsmath}
 \usepackage{amssymb}
-\usepackage{float}
 \usepackage{booktabs}
 \usepackage{hyperref}
 \usepackage{listings}
 \usepackage{xcolor}
-\usepackage{fancyvrb}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric}
+\usepackage[brazilian]{babel}
 \sloppy
 
 % Configuração de código
@@ -315,184 +309,141 @@ def generate_latex(data: dict) -> str:
     columns=flexible
 }
 
-\title{Comparação entre Algoritmo Genético e PSO\\na Otimização de Funções Multimodais}
-\author{João da Cruz de Natividade e Silva Neto}
+% ============================================================================
+% TÍTULO
+% ============================================================================
 
-\address{UFPA -- Universidade Federal do Pará\\
-Gerado em: """
-        + date_str
-        + r"""}
+\title{Comparação entre Algoritmo Genético e PSO\\na Otimização de Funções Multimodais}
+
+\author{João da Cruz de Natividade e Silva Neto\\UFPA - Universidade Federal do Pará}
+
+\address{Tópicos Especiais em Engenharia de Computação III\\
+\texttt{joao.silva.neto@itec.ufpa.br}}
 
 \begin{document}
-
 \maketitle
 
-\begin{abstract}
-Este relatório apresenta uma análise comparativa detalhada entre o Algoritmo Genético (AG) 
-com representação real e a Otimização por Enxame de Partículas (PSO) aplicados à otimização
-de funções multimodais. A simulação foi executada com """
-        + str(analysis["iterations"])
-        + r""" iterações,
-utilizando uma população de """
-        + str(pop_size)
-        + r""" indivíduos/partículas. Os resultados demonstram que
-"""
-        + winner_text
-        + r""", com o AG atingindo """
-        + ag_best_str
-        + r""" e o PSO atingindo """
-        + pso_best_str
-        + r""".
-Este documento inclui a fundamentação teórica, detalhes de implementação, parâmetros utilizados,
-análise de convergência e conclusões baseadas nos dados experimentais obtidos.
-\end{abstract}
-
+% ============================================================================
+% RESUMO
+% ============================================================================
 \begin{resumo}
-Este artigo registra a implementação da simulação AG vs PSO e inclui a rastreabilidade dos prompts
-e modelos de IA utilizados durante o desenvolvimento.
+Este trabalho apresenta uma análise comparativa entre o Algoritmo Genético (AG)
+com representação real e a Otimização por Enxame de Partículas (PSO) aplicados à otimização
+de funções multimodais. A simulação foi executada com """ + str(analysis["iterations"]) + r""" iterações,
+utilizando uma população de """ + str(pop_size) + r""" indivíduos/partículas. Os resultados demonstram que
+""" + winner_text + r""", com o AG atingindo """ + ag_best_str + r""" e o PSO atingindo """ + pso_best_str + r""".
+O projeto foi desenvolvido com assistência de Inteligência Artificial (IA).
+
+\textbf{Palavras-chave:} Algoritmo Genético, PSO, Otimização, Inteligência Artificial, Python
 \end{resumo}
 
-%==============================================================================
+\begin{abstract}
+This work presents a comparative analysis between the Genetic Algorithm (GA)
+with real representation and Particle Swarm Optimization (PSO) applied to
+multimodal function optimization. The simulation was executed with """ + str(analysis["iterations"]) + r""" iterations,
+using a population of """ + str(pop_size) + r""" individuals/particles. Results show that
+""" + winner_text.replace("o Algoritmo Genético (AG) obteve", "the Genetic Algorithm (GA) achieved").replace("o PSO (Particle Swarm Optimization) obteve", "PSO achieved").replace("ambos os algoritmos obtiveram", "both algorithms achieved").replace("melhor desempenho", "better performance").replace("desempenho similar", "similar performance") + r""".
+
+\textbf{Keywords:} Genetic Algorithm, PSO, Optimization, Artificial Intelligence, Python
+\end{abstract}
+
+% ============================================================================
+% 1. INTRODUÇÃO
+% ============================================================================
 \section{Introdução}
-%==============================================================================
+
+\subsection{Contexto}
 
 A otimização de funções multimodais representa um desafio significativo para algoritmos
 de busca. Métodos evolutivos e de inteligência de enxames têm demonstrado eficácia na
 resolução deste tipo de problema, devido à sua capacidade de explorar o espaço de busca
 de forma paralela e escapar de ótimos locais.
 
-Este relatório documenta uma simulação interativa que compara dois dos mais populares
-algoritmos metaheurísticos: o Algoritmo Genético (AG) e a Otimização por Enxame de
-Partículas (PSO, do inglês \textit{Particle Swarm Optimization}).
+\subsection{Objetivo}
 
-\subsection{Função Objetivo}
-
-A função objetivo utilizada nesta simulação é definida como:
+O objetivo deste trabalho é comparar o desempenho do Algoritmo Genético (AG) e do
+PSO (Particle Swarm Optimization) na otimização da seguinte função objetivo:
 
 \begin{equation}
-f(\mathbf{x}) = """
-        + latex_expr
-        + r"""
+f(\mathbf{x}) = """ + latex_expr + r"""
 \end{equation}
 
-O domínio de busca é $x_i \in [-5.12, 5.12]$ para $i = 1, \ldots, """
-        + str(dimensions)
-        + r"""$.
+Onde $x_i \in [-5.12, 5.12]$ para $i = 1, \ldots, """ + str(dimensions) + r"""$.
 
 \subsection{Modo de Otimização}
 
-O modo de otimização selecionado foi: \textbf{"""
-        + mode_text
-        + r"""}.
+O modo de otimização selecionado foi: \textbf{""" + mode_text + r"""}.
 
-\begin{itemize}
-    \item \textbf{Maximização}: Busca pelo maior valor possível da função objetivo
-    \item \textbf{Minimização}: Busca pelo menor valor possível da função objetivo
-    \item \textbf{Valor Alvo}: Busca por um valor específico, minimizando a diferença absoluta
-\end{itemize}
+\subsection{Geração por IA}
 
-%==============================================================================
-\section{Fundamentação Teórica}
-%==============================================================================
+Este projeto foi desenvolvido com assistência de IA, utilizando o modelo Claude Opus 4.5 (Thinking)
+através da interface Antigravity.
+
+% ============================================================================
+% 2. METODOLOGIA
+% ============================================================================
+\section{Metodologia}
 
 \subsection{Algoritmo Genético}
 
-O Algoritmo Genético (AG) é uma metaheurística inspirada no processo de seleção natural
-de Darwin. A implementação utilizada emprega representação real dos cromossomas,
-evitando a necessidade de codificação/decodificação binária.
+O AG utiliza representação real dos cromossomos, evitando a necessidade de
+codificação/decodificação binária. Cada indivíduo é representado por um vetor de
+números reais de dimensão """ + str(dimensions) + r""":
 
-\subsubsection{Representação}
+$$\mathbf{x} = (x_1, x_2, \ldots, x_{""" + str(dimensions) + r"""}) \in [-5.12, 5.12]^{""" + str(dimensions) + r"""}$$
 
-Cada indivíduo é representado por um vetor de números reais de dimensão """
-        + str(dimensions)
-        + r""":
-$$\mathbf{x} = (x_1, x_2, \ldots, x_{"""
-        + str(dimensions)
-        + r"""}) \in [-5.12, 5.12]^{"""
-        + str(dimensions)
-        + r"""}$$
+\subsubsection{Operadores}
 
-\subsubsection{Seleção por Torneio}
-
-A seleção por torneio com $k=3$ competidores foi escolhida pela sua simplicidade e
-capacidade de manter pressão seletiva adequada:
-
-\begin{lstlisting}[caption={Seleção}, label={lst:sel}, basicstyle=\ttfamily\scriptsize]
-def tournament_selection(pop, k=3):
-    cands = random.sample(pop, k)
-    return max(cands, key=lambda i: i.fit)
-\end{lstlisting}
-
-\subsubsection{Crossover BLX-$\alpha$}
-
-O operador de crossover Blend (BLX-$\alpha$) com $\alpha = 0.5$ permite exploração
-além dos limites definidos pelos pais:
-
-\begin{equation}
-c_i = rand(min_i - \alpha d_i, max_i + \alpha d_i)
-\end{equation}
-
-onde $d_i = |p1_i - p2_i|$ é a distância entre os pais na dimensão $i$.
-
-\subsubsection{Mutação Gaussiana}
-
-A mutação utiliza perturbação gaussiana com desvio padrão configurável:
-
-\begin{equation}
-x'_i = x_i + \mathcal{N}(0, \sigma)
-\end{equation}
-
-onde $\sigma$ é proporcional à taxa de mutação configurada ("""
-        + f"{ag_mutation:.4f}"
-        + r""").
-
-\subsubsection{Elitismo}
-
-Os melhores indivíduos são preservados a cada geração, garantindo monotonia
-no melhor fitness encontrado e evitando perda de boas soluções.
-
-%------------------------------------------------------------------------------
-\subsection{PSO}
-%------------------------------------------------------------------------------
-
-O PSO foi implementado seguindo a formulação canônica com inércia, inspirado no
-comportamento coletivo de bandos de pássaros e cardumes de peixes.
-
-\subsubsection{Atualização de Velocidade}
-
-\begin{equation}
-\begin{split}
-v_i^{t+1} = w \cdot v_i^t &+ c_1 r_1 (pBest_i - x_i)\\
-&+ c_2 r_2 (gBest - x_i)
-\end{split}
-\end{equation}
-
-onde:
 \begin{itemize}
-    \item $w = """
-        + f"{pso_w:.2f}"
-        + r"""$ é o coeficiente de inércia
-    \item $c_1 = """
-        + f"{pso_c1:.2f}"
-        + r"""$ é o coeficiente cognitivo
-    \item $c_2 = """
-        + f"{pso_c2:.2f}"
-        + r"""$ é o coeficiente social
-    \item $r_1, r_2 \sim U(0,1)$ são aleatórios
+    \item \textbf{Seleção por Torneio:} $k=3$ competidores
+    \item \textbf{Crossover:} Ponto único com taxa """ + f"{ag_crossover:.2f}" + r"""
+    \item \textbf{Mutação:} Uniforme com taxa """ + f"{ag_mutation:.4f}" + r"""
+    \item \textbf{Elitismo:} Preservação dos melhores indivíduos
 \end{itemize}
 
-\subsubsection{Atualização de Posição}
+\subsection{PSO (Particle Swarm Optimization)}
+
+O PSO foi implementado seguindo a formulação canônica com inércia:
+
+\begin{equation}
+v_i^{t+1} = w \cdot v_i^t + c_1 r_1 (pBest_i - x_i) + c_2 r_2 (gBest - x_i)
+\end{equation}
 
 \begin{equation}
 x_i^{t+1} = x_i^t + v_i^{t+1}
 \end{equation}
 
-A velocidade máxima é limitada para evitar explosão do enxame e garantir
-convergência estável.
+Parâmetros utilizados:
+\begin{itemize}
+    \item $w = """ + f"{pso_w:.2f}" + r"""$ (coeficiente de inércia)
+    \item $c_1 = """ + f"{pso_c1:.2f}" + r"""$ (coeficiente cognitivo)
+    \item $c_2 = """ + f"{pso_c2:.2f}" + r"""$ (coeficiente social)
+\end{itemize}
 
-%==============================================================================
+\subsection{Parâmetros da Simulação}
+
+\begin{table}[H]
+\centering
+\caption{Parâmetros utilizados}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Parâmetro} & \textbf{AG} & \textbf{PSO} \\
+\hline
+Tamanho da População & """ + str(pop_size) + r""" & """ + str(pop_size) + r""" \\
+Dimensões & """ + str(dimensions) + r""" & """ + str(dimensions) + r""" \\
+Taxa de Mutação & """ + f"{ag_mutation:.4f}" + r""" & -- \\
+Taxa de Crossover & """ + f"{ag_crossover:.2f}" + r""" & -- \\
+Inércia ($w$) & -- & """ + f"{pso_w:.2f}" + r""" \\
+Cognitivo ($c_1$) & -- & """ + f"{pso_c1:.2f}" + r""" \\
+Social ($c_2$) & -- & """ + f"{pso_c2:.2f}" + r""" \\
+\hline
+\end{tabular}
+\end{table}
+
+% ============================================================================
+% 3. IMPLEMENTAÇÃO
+% ============================================================================
 \section{Implementação}
-%==============================================================================
 
 A implementação foi realizada utilizando as seguintes tecnologias:
 
@@ -510,236 +461,104 @@ O sistema segue uma arquitetura cliente-servidor com comunicação bidirecional:
 \begin{enumerate}
     \item O cliente envia comandos (step, reset, seek) via WebSocket
     \item O servidor executa uma iteração de ambos os algoritmos
-    \item O estado atualizado (populações, fitness, histórico) é enviado ao cliente
+    \item O estado atualizado é enviado ao cliente
     \item O cliente renderiza as visualizações 3D e gráficos de convergência
 \end{enumerate}
 
-\subsection{Fluxo de Dados e Integração}
-
-\begin{itemize}
-    \item Interface web coleta parâmetros (população, mutação, crossover, inércia, modo de otimização e função objetivo).
-    \item O backend converte a expressão via \texttt{numexpr} e valida símbolos permitidos.
-    \item As iterações são executadas com envio incremental do estado via WebSocket.
-    \item O relatório é gerado como \LaTeX{} e compilado para PDF quando o compilador está disponível.
-\end{itemize}
-
-\subsection{Detalhes dos Algoritmos}
-
-\textbf{Algoritmo Genético (AG).} Implementado com seleção por torneio, crossover de ponto único e mutação uniforme:
-\begin{lstlisting}[caption={Ciclo do AG}, basicstyle=\ttfamily\scriptsize]
-scores = update_best()
-selected = tournament_selection(scores)
-next_pop = crossover(selected)
-mutation()
-record_state()
-\end{lstlisting}
-
-\textbf{PSO.} Atualiza velocidades e posições considerando inércia, componentes cognitivo e social:
-\begin{lstlisting}[caption={Ciclo do PSO}, basicstyle=\ttfamily\scriptsize]
-r1, r2 = random_coeffs()
-v = w*v + c1*r1*(pbest-x) + c2*r2*(gbest-x)
-x = x + v
-clip_bounds(x)
-record_state()
-\end{lstlisting}
-
 \subsection{Rastreamento de IA}
 
-Os modelos de IA utilizados para suporte à implementação e geração de código foram:
+Modelos de IA utilizados:
 \begin{itemize}
-"""
-        + ai_models_text
-        + r"""
+""" + ai_models_text + r"""
 \end{itemize}
 
-Prompts utilizados:
+Alguns prompts utilizados:
 \begin{itemize}
-"""
-        + ai_prompts_text
-        + r"""
+""" + ai_prompts_text + r"""
 \end{itemize}
 
-Template SBC (2025-2026) utilizado: \url{"""
-        + TEMPLATE_SOURCE_URL
-        + r"""}.
-
-\subsection{Função Rastrigin (Padrão)}
-
-A função Rastrigin é um benchmark clássico para algoritmos de otimização:
-
-\begin{lstlisting}[caption={Rastrigin}, basicstyle=\ttfamily\scriptsize]
-def rastrigin(x):
-  A = 10
-  n = len(x)
-  return A*n+sum(x**2-A*np.cos(2*np.pi*x))
-\end{lstlisting}
-
-%==============================================================================
-\section{Configuração Experimental}
-%==============================================================================
-
-\begin{table}[H]
-\centering
-\caption{Parâmetros da simulação}
-\resizebox{\columnwidth}{!}{
-\begin{tabular}{lcc}
-\toprule
-\textbf{Parâmetro} & \textbf{AG} & \textbf{PSO} \\
-\midrule
-Pop./Enxame & """
-        + str(pop_size)
-        + r""" & """
-        + str(pop_size)
-        + r""" \\
-Dimensões & """
-        + str(dimensions)
-        + r""" & """
-        + str(dimensions)
-        + r""" \\
-Mutação & """
-        + f"{ag_mutation:.4f}"
-        + r""" & -- \\
-Crossover & """
-        + f"{ag_crossover:.2f}"
-        + r""" & -- \\
-Inércia ($w$) & -- & """
-        + f"{pso_w:.2f}"
-        + r""" \\
-Cog. ($c_1$) & -- & """
-        + f"{pso_c1:.2f}"
-        + r""" \\
-Soc. ($c_2$) & -- & """
-        + f"{pso_c2:.2f}"
-        + r""" \\
-\midrule
-Modo & \multicolumn{2}{c}{"""
-        + mode_text
-        + r"""} \\
-\bottomrule
-\end{tabular}
-}
-\end{table}
-
-%==============================================================================
+% ============================================================================
+% 4. RESULTADOS
+% ============================================================================
 \section{Resultados}
-%==============================================================================
 
 \subsection{Resumo}
 
-Após """
-        + str(max(ag_iteration, pso_iteration))
-        + r""" iterações:
+Após """ + str(max(ag_iteration, pso_iteration)) + r""" iterações:
 
 \begin{table}[H]
 \centering
 \caption{Resultados finais}
-\resizebox{\columnwidth}{!}{
-\begin{tabular}{lcc}
-\toprule
+\begin{tabular}{|l|c|c|}
+\hline
 \textbf{Métrica} & \textbf{AG} & \textbf{PSO} \\
-\midrule
-Melhor Valor & """
-        + ag_best_str
-        + r""" & """
-        + pso_best_str
-        + r""" \\
-Iterações & """
-        + str(ag_iteration)
-        + r""" & """
-        + str(pso_iteration)
-        + r""" \\
-\bottomrule
+\hline
+Melhor Valor & """ + ag_best_str + r""" & """ + pso_best_str + r""" \\
+Iterações & """ + str(ag_iteration) + r""" & """ + str(pso_iteration) + r""" \\
+\hline
 \end{tabular}
-}
 \end{table}
 
 \subsection{Convergência}
 
 \begin{table}[H]
 \centering
-\caption{Histórico (Amostra)}
-\resizebox{\columnwidth}{!}{
-\begin{tabular}{cccc}
-\toprule
+\caption{Histórico de Convergência (Amostra)}
+\begin{tabular}{|c|c|c|c|}
+\hline
 \textbf{Iter} & \textbf{AG} & \textbf{PSO} & \textbf{Diff} \\
-\midrule
-"""
-        + convergence_rows
-        + r"""
-\bottomrule
+\hline
+""" + convergence_rows + r"""
+\hline
 \end{tabular}
-}
 \end{table}
 
 \subsection{Análise Comparativa}
 
-"""
-        + winner_analysis
-        + r"""
+""" + winner_analysis + r"""
 
 \begin{table}[H]
 \centering
 \caption{Comparação Qualitativa}
-\resizebox{\columnwidth}{!}{
-\begin{tabular}{lccc}
-\toprule
-\textbf{Critério} & \textbf{AG} & \textbf{PSO} & \textbf{Top} \\
-\midrule
-Velocidade & Med & Alta & PSO \\
-Diversidade & Alta & Med & AG \\
-Escape Ót. Locais & Bom & Med & AG \\
-Parâmetros & Alto & Baixo & PSO \\
-Implementação & Med & Simples & PSO \\
-\bottomrule
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Critério} & \textbf{AG} & \textbf{PSO} & \textbf{Melhor} \\
+\hline
+Velocidade de Convergência & Média & Alta & PSO \\
+Diversidade & Alta & Média & AG \\
+Escape de Ótimos Locais & Bom & Médio & AG \\
+Número de Parâmetros & Alto & Baixo & PSO \\
+Facilidade de Implementação & Média & Simples & PSO \\
+\hline
 \end{tabular}
-}
 \end{table}
 
-%==============================================================================
-\section{Discussão}
-%==============================================================================
-
-\subsection{Algoritmo Genético}
-
-O AG demonstrou:
-\begin{itemize}
-    \item Manutenção de diversidade genética via mutação
-    \item Exploração eficiente inicial
-    \item Robustez contra mínimos locais
-\end{itemize}
-
-\subsection{PSO}
-
-O PSO apresentou:
-\begin{itemize}
-    \item Convergência rápida inicial
-    \item Balanço exploração/explotação
-    \item Menor número de parâmetros
-\end{itemize}
-
-%==============================================================================
-\section{Conclusões}
-%==============================================================================
+% ============================================================================
+% 5. CONCLUSÃO
+% ============================================================================
+\section{Conclusão}
 
 Conclusões principais:
+
 \begin{enumerate}
-    \item Ambos otimizam bem funções multimodais
-    \item PSO converge mais rápido inicialmente
-    \item AG oferece maior robustez
-    \item A visualização facilita a compreensão
+    \item Ambos os algoritmos são eficazes para otimização de funções multimodais
+    \item O PSO apresentou convergência mais rápida nas iterações iniciais
+    \item O AG demonstrou maior robustez na manutenção de diversidade
+    \item A visualização interativa facilita a compreensão do comportamento dos algoritmos
 \end{enumerate}
 
 \subsection{Trabalhos Futuros}
 
 \begin{itemize}
-    \item Hibridização (Meméticos)
-    \item Adaptação de parâmetros
-    \item Comparação com DE/CMA-ES
+    \item Hibridização AG-PSO (Algoritmos Meméticos)
+    \item Adaptação dinâmica de parâmetros
+    \item Comparação com outros algoritmos (DE, CMA-ES)
 \end{itemize}
 
-%==============================================================================
+% ============================================================================
+% DISPONIBILIDADE
+% ============================================================================
 \section{Disponibilidade}
-%==============================================================================
 
 O código fonte e a versão interativa desta simulação estão disponíveis em:
 
@@ -748,21 +567,15 @@ O código fonte e a versão interativa desta simulação estão disponíveis em:
     \item \textbf{Repositório}: \url{https://github.com/joaosnet/evolutionary-optimization-viz-ag-pso}
 \end{itemize}
 
-%==============================================================================
-\section*{Informações}
-%==============================================================================
+% ============================================================================
+% REFERÊNCIAS
+% ============================================================================
+\section*{Referências}
 
-Relatório gerado a partir de simulação computacional.
 \begin{itemize}
-    \item \textbf{Data}: """
-        + datetime.now().strftime("%d/%m/%y %H:%M")
-        + r"""
-    \item \textbf{Iter}: """
-        + str(max(ag_iteration, pso_iteration))
-        + r"""
-    \item \textbf{Pop}: """
-        + str(pop_size)
-        + r"""
+    \item Holland, J. H. (1975). \textit{Adaptation in Natural and Artificial Systems}. University of Michigan Press.
+    \item Kennedy, J., \& Eberhart, R. (1995). Particle Swarm Optimization. \textit{Proceedings of ICNN'95}.
+    \item Goldberg, D. E. (1989). \textit{Genetic Algorithms in Search, Optimization, and Machine Learning}. Addison-Wesley.
 \end{itemize}
 
 \end{document}
