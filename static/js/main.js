@@ -1108,14 +1108,21 @@ async function generatePdfReport() {
 
     try {
         const { jsPDF } = window.jspdf;
-        const aiModels = ['Claude Opus 4.5 (Thinking) via Antigravity'];
+        const aiModels = ['gemini 3 pro', 'claude opus 4.5', 'gpt-5.2-codex'];
         const aiPrompts = [
             'Gere imagens de dashboard minimalista moderno realista com AG vs Enxame de Partículas',
-            'Gostei do "clean minimalist bright dashboard UI design..." implemente em html css js com animações',
+            'Gostei do "clean minimalist bright dashboard UI design, comparison between Genetic Algorithm (AG) and Particle Swarm (PSO), elegant charts, soft shadows, realistic render, data visualization, high end interface, 8k" implemente ele em html css javascript com animacoes, e a parte logica implemente em python, conecte tudo com fastapi no python 3.14.2 freetreat',
             'Proponha melhorias no front end do dashboard',
-            'quero poder ajustar os graficos 3d diretamente na interface',
-            'tem que ser possivel trocar de otimizacao (max, min ou target)',
-            'Quero poder trocar a funcao de interesse com um teclado virtual para funções matemáticas'
+            'quero poder ajustar os graficos 3d diretamente na interface, e eles por padrao estao tornando dificil ver as particulas',
+            'tem que ser possivel trocar de otimizacao, ou seja pode ser de maximizacao, minimizacao ou outro',
+            'Quero poder trocar a funcao de interesse, para isso preciso de um campo para trocar que possua um teclado virtual para funcoes matematicas, alem disso corrija os : que estao ficando quebrados onde sao usados,Melhore os botoes de trocar de tema para que tenha uma animacao de formato circular na tela toda de troca de tema quando forem clicados, os botoes devem ser modernos, e os botoes de troca de traducao devem ser mais modernos',
+            'Quero poder trocar a funcao de interesse, para isso preciso de um campo para trocar que possua um teclado virtual para funcoes matematicas, alem disso corrija os : que estao ficando quebrados onde sao usados',
+            'refaça essa parte da expressao matematica por completo para usar corretamente o mathjs e o teclado deveria ser virtual',
+            'o teclado virtual deveria ser completo o que vem padrao do mathjs',
+            'A funcao padrao que deve vir no teclado é a da imagem',
+            'não está dando para resetar',
+            'Ainda não é possivel resetar ao estado inicial, de poder voltar a qualquer iteracao',
+            'syntax error in part "*(x1^2+x2^2))^2)" (char 44'
         ];
 
         // Capture images (awaiting promises)
