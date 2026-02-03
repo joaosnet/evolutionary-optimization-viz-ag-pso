@@ -1143,11 +1143,11 @@ async function generatePdfReport() {
         // --- SBC Layout Constants (based on sbc-template.sty) ---
         const pageWidth = doc.internal.pageSize.width;   // 210mm
         const pageHeight = doc.internal.pageSize.height; // 297mm
-        const marginTop = 30;      // SBC: ~3cm top
+        const marginTop = 25;      // SBC: ~2.5cm top
         const marginBottom = 20;   // SBC: ~2cm bottom
-        const marginLeft = 30;     // SBC: ~3cm left
-        const marginRight = 20;    // SBC: ~2cm right
-        const colGap = 8;          // Gap between columns
+        const marginLeft = 25;     // SBC: ~2.5cm left
+        const marginRight = 25;    // SBC: ~2.5cm right
+        const colGap = 6;          // Gap between columns (smaller)
 
         // Column Calculations
         const contentWidth = pageWidth - marginLeft - marginRight;
