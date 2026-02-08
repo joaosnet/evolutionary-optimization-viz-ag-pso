@@ -3,21 +3,17 @@
  * Tests GA, PSO, and ED (Differential Evolution)
  */
 
-// Load algorithm source files
-const fs = require('fs');
-const path = require('path');
+// Load modules via CJS exports
+const { OptimizationAlgorithm, ArrayUtils, ExpressionEvaluator, rastrigin } =
+    require('../static/js/algorithms/base.js');
 
-// Simple eval-based loader for browser-style scripts
-function loadScript(filePath) {
-    const code = fs.readFileSync(path.resolve(__dirname, filePath), 'utf-8');
-    eval(code);
-}
+// GA, PSO, ED expect base classes in global scope (browser pattern)
+global.OptimizationAlgorithm = OptimizationAlgorithm;
+global.ArrayUtils = ArrayUtils;
 
-// Load in order (base must come first)
-loadScript('../static/js/algorithms/base.js');
-loadScript('../static/js/algorithms/ga.js');
-loadScript('../static/js/algorithms/pso.js');
-loadScript('../static/js/algorithms/ed.js');
+const { GeneticAlgorithm } = require('../static/js/algorithms/ga.js');
+const { ParticleSwarmOptimization } = require('../static/js/algorithms/pso.js');
+const { DifferentialEvolution } = require('../static/js/algorithms/ed.js');
 
 // Simple test fitness function: sphere f(x) = sum(x_i^2)
 function sphereFunction(population) {
