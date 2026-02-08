@@ -11,6 +11,24 @@
         content="Interactive visualization comparing Genetic Algorithm (AG) vs Particle Swarm Optimization (PSO) vs Differential Evolution (ED) on benchmark functions">
     <link rel="stylesheet" href="./static/css/style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive@0.100.0/dist/mathlive.min.css">
+    <script>
+        // Workaround: ensure multiple getImageData readbacks are fast by creating
+        // 2D canvas contexts with { willReadFrequently: true } when not provided.
+        // See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently
+        (function() {
+            const _origGetContext = HTMLCanvasElement.prototype.getContext;
+            HTMLCanvasElement.prototype.getContext = function(type, options) {
+                if (type === '2d') {
+                    if (!options || typeof options === 'boolean') options = {};
+                    if (options.willReadFrequently === undefined) {
+                        // Clone options to avoid mutating caller objects
+                        options = Object.assign({}, options, { willReadFrequently: true });
+                    }
+                }
+                return _origGetContext.call(this, type, options);
+            };
+        })();
+    </script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <link
         href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap"
