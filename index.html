@@ -94,6 +94,36 @@
                             title="Continue from here" style="display: none;" data-i18n="continue">Continue</button>
                     </div>
                 </div>
+                <div class="control-group benchmark-controls">
+                    <div class="benchmark-inline">
+                        <label class="bench-param" title="Number of runs">
+                            <span class="bench-label" data-i18n="benchmark_runs">Runs</span>
+                            <input type="range" id="benchmark_runs" min="5" max="100" step="5" value="30"
+                                oninput="document.getElementById('val-bench-runs').innerText = this.value">
+                            <span class="bench-value" id="val-bench-runs">30</span>
+                        </label>
+                        <label class="bench-param" title="Iterations per run">
+                            <span class="bench-label" data-i18n="benchmark_iters">Iters</span>
+                            <input type="range" id="benchmark_iters" min="50" max="2000" step="50" value="200"
+                                oninput="document.getElementById('val-bench-iters').innerText = this.value">
+                            <span class="bench-value" id="val-bench-iters">200</span>
+                        </label>
+                        <button class="benchmark-btn" id="benchmarkBtn" onclick="runBenchmark()">
+                            🏆 <span data-i18n="benchmark_start">Benchmark</span>
+                        </button>
+                    </div>
+                    <div class="benchmark-status" id="benchmarkStatus" style="display:none;">
+                        <div class="benchmark-progress" id="benchmarkProgress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="benchmarkFill" style="width:0%"></div>
+                            </div>
+                            <span class="progress-label" id="benchmarkLabel">Run 0/30 • Iter 0/200</span>
+                        </div>
+                        <button class="ghost-btn bench-stop-btn" id="benchmarkStopBtn" onclick="stopBenchmark()">
+                            ✕ <span data-i18n="benchmark_stop">Stop</span>
+                        </button>
+                    </div>
+                </div>
         </header>
 
         <details class="settings-panel">
@@ -250,15 +280,16 @@
                             oninput="document.getElementById('val-ed-cr').innerText = this.value">
                     </label>
                 </div>
+
             </div>
         </details>
 
         <main>
             <!-- Genetic Algorithm Card -->
-            <div class="card algorithm-card">
+            <div class="card algorithm-card" data-algo="ag">
                 <div class="card-header">
                     <h2 data-i18n="ag_title">Genetic Algorithm</h2>
-                    <span class="badge ag-badge">AG</span>
+                    <span class="badge ag-badge" onclick="toggleFocus('ag')" role="button" tabindex="0" title="Focus AG">AG</span>
                 </div>
                 <div class="plot-controls" aria-label="AG plot controls">
                     <label>
@@ -291,10 +322,10 @@
             </div>
 
             <!-- PSO Card -->
-            <div class="card algorithm-card">
+            <div class="card algorithm-card" data-algo="pso">
                 <div class="card-header">
                     <h2 data-i18n="pso_title">Particle Swarm</h2>
-                    <span class="badge pso-badge">PSO</span>
+                    <span class="badge pso-badge" onclick="toggleFocus('pso')" role="button" tabindex="0" title="Focus PSO">PSO</span>
                 </div>
                 <div class="plot-controls" aria-label="PSO plot controls">
                     <label>
@@ -327,10 +358,10 @@
             </div>
 
             <!-- ED Card -->
-            <div class="card algorithm-card">
+            <div class="card algorithm-card" data-algo="ed">
                 <div class="card-header">
                     <h2 data-i18n="ed_title">Differential Evolution</h2>
-                    <span class="badge ed-badge">ED</span>
+                    <span class="badge ed-badge" onclick="toggleFocus('ed')" role="button" tabindex="0" title="Focus ED">ED</span>
                 </div>
                 <div class="plot-controls" aria-label="ED plot controls">
                     <label>
@@ -371,6 +402,25 @@
         </section>
     </div>
     <div id="themeWipe" class="theme-wipe" aria-hidden="true"></div>
+
+    <!-- Benchmark Results Modal -->
+    <div class="modal-overlay" id="benchmarkModal" style="display:none;" onclick="closeBenchmarkModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeBenchmarkModal()" aria-label="Close">&times;</button>
+            <div class="modal-header">
+                <span class="trophy-icon" id="trophyIcon">🏆</span>
+                <h2 class="modal-title" id="modalTitle"></h2>
+                <p class="modal-subtitle" id="modalSubtitle"></p>
+            </div>
+            <div class="winner-banner" id="winnerBanner"></div>
+            <div class="modal-body">
+                <h3 data-i18n="benchmark_stats" id="statsTitle">Statistics</h3>
+                <div class="stats-table-container" id="statsTableContainer"></div>
+                <h3 data-i18n="benchmark_wins" id="winsTitle">Wins per Algorithm</h3>
+                <div class="wins-chart" id="winsChart"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- Math.js for expression parsing -->
     <script src="https://cdn.jsdelivr.net/npm/mathjs@11.11.0/lib/browser/math.min.js"></script>

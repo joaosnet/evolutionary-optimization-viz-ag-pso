@@ -120,7 +120,25 @@ const translations = {
         convergence_window: "Window (iters)",
         converged_msg: "Converged!",
         continue: "Continue",
-        generate_report: "Report"
+        generate_report: "Report",
+        benchmark_title: "Multi-Run Benchmark",
+        benchmark_runs: "Number of Runs",
+        benchmark_iters: "Iterations per Run",
+        benchmark_start: "Run Benchmark",
+        benchmark_stop: "Stop",
+        benchmark_running: "Running...",
+        benchmark_stats: "Statistics",
+        benchmark_wins: "Wins per Algorithm",
+        benchmark_winner: "Winner",
+        benchmark_tie: "Tie",
+        benchmark_result_title: "Benchmark Results",
+        benchmark_result_subtitle: "runs completed",
+        stat_mean: "Mean",
+        stat_std: "Std Dev",
+        stat_best: "Best",
+        stat_worst: "Worst",
+        stat_median: "Median",
+        stat_wins: "Wins"
     },
     pt: {
         eyebrow: "Otimização ao Vivo",
@@ -176,7 +194,25 @@ const translations = {
         convergence_window: "Janela (iters)",
         converged_msg: "Convergiu!",
         continue: "Continuar",
-        generate_report: "Relatório"
+        generate_report: "Relatório",
+        benchmark_title: "Benchmark Multi-Execução",
+        benchmark_runs: "Número de Execuções",
+        benchmark_iters: "Iterações por Execução",
+        benchmark_start: "Executar Benchmark",
+        benchmark_stop: "Parar",
+        benchmark_running: "Executando...",
+        benchmark_stats: "Estatísticas",
+        benchmark_wins: "Vitórias por Algoritmo",
+        benchmark_winner: "Vencedor",
+        benchmark_tie: "Empate",
+        benchmark_result_title: "Resultados do Benchmark",
+        benchmark_result_subtitle: "execuções concluídas",
+        stat_mean: "Média",
+        stat_std: "Desvio Padrão",
+        stat_best: "Melhor",
+        stat_worst: "Pior",
+        stat_median: "Mediana",
+        stat_wins: "Vitórias"
     }
 };
 
@@ -1190,9 +1226,463 @@ function resizePlots() {
     }, 120);
 }
 
+// --- Algorithm Focus Mode ---
+let focusedAlgorithm = null; // null = show all, 'ag' | 'pso' | 'ed'
+
+function toggleFocus(algo) {
+    const mainEl = document.querySelector('main');
+    if (!mainEl) return;
+
+    if (focusedAlgorithm === algo) {
+        // Unfocus — show all
+        focusedAlgorithm = null;
+        mainEl.removeAttribute('data-focus');
+    } else {
+        // Focus on this algorithm
+        focusedAlgorithm = algo;
+        mainEl.setAttribute('data-focus', algo);
+    }
+
+    // Update badge active states
+    document.querySelectorAll('.badge').forEach(badge => {
+        badge.classList.remove('badge-focused');
+    });
+    if (focusedAlgorithm) {
+        const activeCard = mainEl.querySelector(`[data-algo="${focusedAlgorithm}"]`);
+        if (activeCard) {
+            activeCard.querySelector('.badge')?.classList.add('badge-focused');
+        }
+    }
+
+    // Resize plots after CSS transition
+    setTimeout(resizePlots, 350);
+}
+
+// Keyboard accessibility for badges (Enter/Space)
+document.addEventListener('keydown', function(e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('badge')) {
+        e.preventDefault();
+        e.target.click();
+    }
+});
+
 // --- Report Generation (Client-Side PDF with jsPDF) ---
 let titleClickCount = 0;
 let titleClickTimer = null;
+
+// --- Multi-Run Benchmark (Animated, Real-Time) ---
+let benchmarkRunning = false;
+let benchmarkCancelled = false;
+let benchmarkTimer = null;
+
+// Benchmark state
+let benchmarkResults = null;
+let benchmarkWins = null;
+let benchmarkRunIndex = 0;
+let benchmarkTotalRuns = 0;
+let benchmarkItersPerRun = 0;
+let benchmarkCurrentIter = 0;
+
+function runBenchmark() {
+    if (benchmarkRunning) return;
+    if (!compiledExpression) {
+        compileExpression();
+        if (!compiledExpression) return;
+    }
+
+    // Stop any running simulation
+    if (isRunning) {
+        isRunning = false;
+        stopSimulation();
+        updateStartBtnText();
+    }
+
+    benchmarkRunning = true;
+    benchmarkCancelled = false;
+
+    const btn = document.getElementById('benchmarkBtn');
+    const statusEl = document.getElementById('benchmarkStatus');
+    const fillEl = document.getElementById('benchmarkFill');
+    const labelEl = document.getElementById('benchmarkLabel');
+    const startBtn = document.getElementById('startBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    benchmarkTotalRuns = parseInt(document.getElementById('benchmark_runs')?.value) || 30;
+    benchmarkItersPerRun = parseInt(document.getElementById('benchmark_iters')?.value) || 200;
+
+    // Disable normal controls during benchmark
+    if (btn) btn.style.display = 'none';
+    if (startBtn) startBtn.disabled = true;
+    if (resetBtn) resetBtn.disabled = true;
+    if (statusEl) statusEl.style.display = 'flex';
+
+    benchmarkResults = { ag: [], pso: [], ed: [] };
+    benchmarkWins = { ag: 0, pso: 0, ed: 0, tie: 0 };
+    benchmarkRunIndex = 0;
+    benchmarkCurrentIter = 0;
+
+    // Start first run
+    startBenchmarkRun();
+}
+
+function stopBenchmark() {
+    benchmarkCancelled = true;
+    if (benchmarkTimer) {
+        cancelAnimationFrame(benchmarkTimer);
+        clearTimeout(benchmarkTimer);
+        benchmarkTimer = null;
+    }
+    finishBenchmark(true);
+}
+
+function startBenchmarkRun() {
+    if (benchmarkCancelled) return;
+
+    // Reset simulation state for this run
+    currentIteration = 0;
+    updateIterationLabel();
+    resetHistoryCache();
+
+    // Clear previous convergence message
+    if (functionErrorEl) {
+        functionErrorEl.textContent = '';
+        functionErrorEl.classList.remove('success-message');
+    }
+
+    // Initialize fresh algorithms
+    if (!initAlgorithms()) {
+        finishBenchmark(true);
+        return;
+    }
+
+    benchmarkCurrentIter = 0;
+
+    // Reset convergence plot for this run
+    try {
+        Plotly.deleteTraces('convergencePlot', [0, 1, 2]);
+        const seriesNames = getSeriesNames();
+        Plotly.addTraces('convergencePlot', [
+            { x: [], y: [], mode: 'lines', name: seriesNames.ag, line: { color: '#0f766e' } },
+            { x: [], y: [], mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } },
+            { x: [], y: [], mode: 'lines', name: seriesNames.ed, line: { color: '#be123c' } }
+        ]);
+    } catch (e) { /* Plotly not ready */ }
+
+    // Show initial state
+    const agState = gaInstance.getState();
+    const psoState = psoInstance.getState();
+    const edState = edInstance.getState();
+    updateDashboard({
+        ag: { ...agState, best_score: agState.bestScore, max_iteration: agState.maxIteration },
+        pso: { ...psoState, best_score: psoState.bestScore, max_iteration: psoState.maxIteration },
+        ed: { ...edState, best_score: edState.bestScore, max_iteration: edState.maxIteration }
+    });
+
+    // Update progress label
+    updateBenchmarkProgress();
+
+    // Start animated stepping
+    benchmarkAnimatedStep();
+}
+
+function benchmarkAnimatedStep() {
+    if (benchmarkCancelled || !gaInstance || !psoInstance || !edInstance) return;
+
+    // Step all algorithms
+    gaInstance.step();
+    psoInstance.step();
+    edInstance.step();
+
+    benchmarkCurrentIter++;
+
+    // Get states and update dashboard (visual update)
+    const agState = gaInstance.getState();
+    const psoState = psoInstance.getState();
+    const edState = edInstance.getState();
+
+    // Record history for convergence chart
+    if (Number.isFinite(agState.bestScore)) historyCache.ag[agState.iteration] = agState.bestScore;
+    if (Number.isFinite(psoState.bestScore)) historyCache.pso[psoState.iteration] = psoState.bestScore;
+    if (Number.isFinite(edState.bestScore)) historyCache.ed[edState.iteration] = edState.bestScore;
+
+    currentIteration = agState.iteration;
+    updateIterationLabel();
+
+    // Update 3D plots
+    agScoreEl.textContent = Number.isFinite(agState.bestScore) ? agState.bestScore.toFixed(4) : "Inf";
+    psoScoreEl.textContent = Number.isFinite(psoState.bestScore) ? psoState.bestScore.toFixed(4) : "Inf";
+    edScoreEl.textContent = Number.isFinite(edState.bestScore) ? edState.bestScore.toFixed(4) : "Inf";
+
+    const updatePlot = (plotId, population, opacity, pointSize, color, seriesName) => {
+        const xs = population.map(p => p[0]);
+        const ys = population.map(p => p[1]);
+        const zs = population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))));
+        const data = [
+            { ...surfaceTrace, z: cachedSurfaceZ, opacity },
+            { x: xs, y: ys, z: zs, mode: 'markers', type: 'scatter3d',
+              marker: { size: pointSize, color }, name: seriesName }
+        ];
+        Plotly.react(plotId, data, document.getElementById(plotId).layout);
+    };
+
+    const seriesNames = getSeriesNames();
+    updatePlot('agPlot', agState.population, getNumberValue('ag_surface_opacity', 0.45),
+        getNumberValue('ag_point_size', 5), '#0f766e', seriesNames.ag);
+    updatePlot('psoPlot', psoState.population, getNumberValue('pso_surface_opacity', 0.45),
+        getNumberValue('pso_point_size', 5), '#d97706', seriesNames.pso);
+    updatePlot('edPlot', edState.population, getNumberValue('ed_surface_opacity', 0.45),
+        getNumberValue('ed_point_size', 5), '#be123c', seriesNames.ed);
+
+    // Update convergence chart
+    renderConvergence(agState.iteration);
+
+    // Update progress
+    updateBenchmarkProgress();
+
+    // Check if this run is done
+    if (benchmarkCurrentIter >= benchmarkItersPerRun) {
+        // Record results for this run
+        benchmarkResults.ag.push(gaInstance.bestScore);
+        benchmarkResults.pso.push(psoInstance.bestScore);
+        benchmarkResults.ed.push(edInstance.bestScore);
+
+        // Determine run winner
+        const mode = getOptimizationMode();
+        const scores = [
+            { key: 'ag', score: gaInstance.bestScore },
+            { key: 'pso', score: psoInstance.bestScore },
+            { key: 'ed', score: edInstance.bestScore }
+        ];
+        if (mode === 'max') {
+            scores.sort((a, b) => b.score - a.score);
+        } else {
+            scores.sort((a, b) => a.score - b.score);
+        }
+        if (scores[0].score === scores[1].score) {
+            benchmarkWins.tie++;
+        } else {
+            benchmarkWins[scores[0].key]++;
+        }
+
+        benchmarkRunIndex++;
+
+        if (benchmarkRunIndex < benchmarkTotalRuns && !benchmarkCancelled) {
+            // Pause briefly between runs so user sees the transition
+            setTimeout(startBenchmarkRun, 300);
+        } else {
+            finishBenchmark(false);
+        }
+    } else {
+        // Schedule next iteration
+        const delay = parseInt(document.getElementById('sim_delay')?.value) || 0;
+        if (delay > 0) {
+            benchmarkTimer = setTimeout(benchmarkAnimatedStep, delay);
+        } else {
+            benchmarkTimer = requestAnimationFrame(benchmarkAnimatedStep);
+        }
+    }
+}
+
+function updateBenchmarkProgress() {
+    const fillEl = document.getElementById('benchmarkFill');
+    const labelEl = document.getElementById('benchmarkLabel');
+    const t = translations[currentLang];
+
+    const totalIters = benchmarkTotalRuns * benchmarkItersPerRun;
+    const completedIters = benchmarkRunIndex * benchmarkItersPerRun + benchmarkCurrentIter;
+    const pct = Math.round((completedIters / totalIters) * 100);
+
+    if (fillEl) fillEl.style.width = pct + '%';
+    if (labelEl) {
+        const runLabel = `Run ${benchmarkRunIndex + 1}/${benchmarkTotalRuns}`;
+        const iterLabel = `Iter ${benchmarkCurrentIter}/${benchmarkItersPerRun}`;
+        labelEl.textContent = `${runLabel} • ${iterLabel}`;
+    }
+}
+
+function finishBenchmark(cancelled) {
+    benchmarkRunning = false;
+
+    const btn = document.getElementById('benchmarkBtn');
+    const statusEl = document.getElementById('benchmarkStatus');
+    const startBtn = document.getElementById('startBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    // Restore normal controls
+    if (btn) btn.style.display = '';
+    if (startBtn) startBtn.disabled = false;
+    if (resetBtn) resetBtn.disabled = false;
+    if (statusEl) statusEl.style.display = 'none';
+
+    if (!cancelled && benchmarkResults && benchmarkRunIndex > 0) {
+        showBenchmarkResults(benchmarkResults, benchmarkWins, benchmarkRunIndex, benchmarkItersPerRun);
+    }
+}
+
+function computeStats(arr) {
+    const n = arr.length;
+    if (n === 0) return { mean: 0, std: 0, best: 0, worst: 0, median: 0 };
+
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mean = arr.reduce((s, v) => s + v, 0) / n;
+    const variance = arr.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
+    const std = Math.sqrt(variance);
+    const median = n % 2 === 0 ? (sorted[n / 2 - 1] + sorted[n / 2]) / 2 : sorted[Math.floor(n / 2)];
+
+    const mode = getOptimizationMode();
+    const best = mode === 'max' ? sorted[n - 1] : sorted[0];
+    const worst = mode === 'max' ? sorted[0] : sorted[n - 1];
+
+    return { mean, std, best, worst, median };
+}
+
+function showBenchmarkResults(results, wins, totalRuns, itersPerRun) {
+    const t = translations[currentLang];
+    const modal = document.getElementById('benchmarkModal');
+    const titleEl = document.getElementById('modalTitle');
+    const subtitleEl = document.getElementById('modalSubtitle');
+    const bannerEl = document.getElementById('winnerBanner');
+    const tableContainer = document.getElementById('statsTableContainer');
+    const winsChartEl = document.getElementById('winsChart');
+    const statsTitle = document.getElementById('statsTitle');
+    const winsTitle = document.getElementById('winsTitle');
+
+    if (statsTitle) statsTitle.textContent = t.benchmark_stats || 'Statistics';
+    if (winsTitle) winsTitle.textContent = t.benchmark_wins || 'Wins per Algorithm';
+
+    // Title
+    titleEl.textContent = t.benchmark_result_title || 'Benchmark Results';
+    subtitleEl.textContent = `${totalRuns} ${t.benchmark_result_subtitle || 'runs completed'} \u2022 ${itersPerRun} ${t.benchmark_iters || 'iterations each'}`;
+
+    // Compute stats
+    const agStats = computeStats(results.ag);
+    const psoStats = computeStats(results.pso);
+    const edStats = computeStats(results.ed);
+
+    // Determine overall winner
+    const mode = getOptimizationMode();
+    const algorithms = [
+        { key: 'ag', name: t.ag_series || 'AG', wins: wins.ag, mean: agStats.mean, color: '#0f766e', badge: 'ag-badge' },
+        { key: 'pso', name: t.pso_series || 'PSO', wins: wins.pso, mean: psoStats.mean, color: '#d97706', badge: 'pso-badge' },
+        { key: 'ed', name: t.ed_series || 'ED', wins: wins.ed, mean: edStats.mean, color: '#be123c', badge: 'ed-badge' }
+    ];
+
+    // Sort by wins, then by mean
+    algorithms.sort((a, b) => {
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        if (mode === 'max') return b.mean - a.mean;
+        return a.mean - b.mean;
+    });
+
+    const winner = algorithms[0];
+    const isTie = winner.wins === algorithms[1].wins;
+
+    // Winner banner
+    if (isTie) {
+        const tiedAlgs = algorithms.filter(a => a.wins === winner.wins);
+        bannerEl.innerHTML = `<span class="winner-label">${t.benchmark_tie || 'Tie'}</span> <span class="winner-names">${tiedAlgs.map(a => a.name).join(' & ')}</span>`;
+        bannerEl.style.background = 'linear-gradient(135deg, #6b7280, #9ca3af)';
+    } else {
+        bannerEl.innerHTML = `<span class="winner-trophy">\ud83c\udfc6</span> <span class="winner-label">${t.benchmark_winner || 'Winner'}:</span> <span class="winner-name">${winner.name}</span> <span class="winner-wins">(${winner.wins}/${totalRuns} ${t.stat_wins || 'wins'})</span>`;
+        bannerEl.style.background = `linear-gradient(135deg, ${winner.color}, ${winner.color}dd)`;
+    }
+
+    // Stats table
+    const statLabels = {
+        mean: t.stat_mean || 'Mean',
+        std: t.stat_std || 'Std Dev',
+        best: t.stat_best || 'Best',
+        worst: t.stat_worst || 'Worst',
+        median: t.stat_median || 'Median',
+        wins: t.stat_wins || 'Wins'
+    };
+
+    const statsMap = { ag: agStats, pso: psoStats, ed: edStats };
+    const algNames = { ag: t.ag_series || 'AG', pso: t.pso_series || 'PSO', ed: t.ed_series || 'ED' };
+    const algColors = { ag: '#0f766e', pso: '#d97706', ed: '#be123c' };
+
+    let tableHTML = '<table class="stats-table"><thead><tr><th></th>';
+    ['ag', 'pso', 'ed'].forEach(k => {
+        tableHTML += `<th style="color:${algColors[k]}">${algNames[k]}</th>`;
+    });
+    tableHTML += '</tr></thead><tbody>';
+
+    ['mean', 'std', 'best', 'worst', 'median'].forEach(stat => {
+        tableHTML += `<tr><td class="stat-label">${statLabels[stat]}</td>`;
+        // Find best value for highlighting
+        const vals = ['ag', 'pso', 'ed'].map(k => statsMap[k][stat]);
+        let bestVal;
+        if (stat === 'std') {
+            bestVal = Math.min(...vals); // lowest std is best
+        } else if (stat === 'worst') {
+            bestVal = mode === 'max' ? Math.max(...vals) : Math.min(...vals);
+        } else {
+            bestVal = mode === 'max' ? Math.max(...vals) : Math.min(...vals);
+        }
+
+        ['ag', 'pso', 'ed'].forEach(k => {
+            const v = statsMap[k][stat];
+            const isBest = v === bestVal;
+            tableHTML += `<td class="${isBest ? 'stat-best' : ''}">${v.toFixed(6)}</td>`;
+        });
+        tableHTML += '</tr>';
+    });
+
+    // Wins row
+    tableHTML += `<tr class="wins-row"><td class="stat-label">${statLabels.wins}</td>`;
+    const maxWins = Math.max(wins.ag, wins.pso, wins.ed);
+    ['ag', 'pso', 'ed'].forEach(k => {
+        const w = wins[k];
+        const isBest = w === maxWins && w > 0;
+        tableHTML += `<td class="${isBest ? 'stat-best' : ''}">${w}</td>`;
+    });
+    tableHTML += '</tr></tbody></table>';
+    tableContainer.innerHTML = tableHTML;
+
+    // Wins chart (horizontal bars)
+    const maxW = Math.max(wins.ag, wins.pso, wins.ed, 1);
+    let barsHTML = '';
+    [{ key: 'ag', name: algNames.ag, color: algColors.ag, w: wins.ag },
+     { key: 'pso', name: algNames.pso, color: algColors.pso, w: wins.pso },
+     { key: 'ed', name: algNames.ed, color: algColors.ed, w: wins.ed }].forEach(item => {
+        const pct = Math.round((item.w / totalRuns) * 100);
+        barsHTML += `<div class="win-bar-row">
+            <span class="win-bar-label">${item.name}</span>
+            <div class="win-bar-track">
+                <div class="win-bar-fill" style="width:${pct}%;background:${item.color}">
+                    <span class="win-bar-value">${item.w}</span>
+                </div>
+            </div>
+        </div>`;
+    });
+    if (wins.tie > 0) {
+        const pct = Math.round((wins.tie / totalRuns) * 100);
+        barsHTML += `<div class="win-bar-row">
+            <span class="win-bar-label">${t.benchmark_tie || 'Tie'}</span>
+            <div class="win-bar-track">
+                <div class="win-bar-fill" style="width:${pct}%;background:#6b7280">
+                    <span class="win-bar-value">${wins.tie}</span>
+                </div>
+            </div>
+        </div>`;
+    }
+    winsChartEl.innerHTML = barsHTML;
+
+    // Show modal
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => modal.classList.add('show'), 10);
+}
+
+function closeBenchmarkModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modal = document.getElementById('benchmarkModal');
+    modal.classList.remove('show');
+    setTimeout(() => {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }, 300);
+}
 
 
 async function generatePdfReport() {

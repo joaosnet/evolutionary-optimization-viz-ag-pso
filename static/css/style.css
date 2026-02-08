@@ -740,6 +740,135 @@ main {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 2rem;
+    transition: grid-template-columns 0.3s ease;
+}
+
+/* Algorithm cards transition */
+.algorithm-card {
+    transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.3s ease, grid-column 0.3s ease;
+}
+
+/* ========================================
+   Algorithm Focus Mode
+   ======================================== */
+
+/* Badge as clickable focus button */
+.badge {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    user-select: none;
+}
+
+.badge:hover {
+    transform: scale(1.12);
+    filter: brightness(1.15);
+}
+
+.badge:active {
+    transform: scale(0.95);
+}
+
+.badge-focused {
+    animation: badge-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+    0%, 100% { box-shadow: 0 0 8px var(--accent-glow-teal); }
+    50% { box-shadow: 0 0 18px 4px var(--accent-glow-teal); }
+}
+
+.ag-badge.badge-focused {
+    animation-name: badge-pulse-ag;
+}
+@keyframes badge-pulse-ag {
+    0%, 100% { box-shadow: 0 0 8px var(--accent-glow-teal); }
+    50% { box-shadow: 0 0 18px 4px var(--accent-glow-teal); }
+}
+
+.pso-badge.badge-focused {
+    animation-name: badge-pulse-pso;
+}
+@keyframes badge-pulse-pso {
+    0%, 100% { box-shadow: 0 0 8px var(--accent-glow-amber); }
+    50% { box-shadow: 0 0 18px 4px var(--accent-glow-amber); }
+}
+
+.ed-badge.badge-focused {
+    animation-name: badge-pulse-ed;
+}
+@keyframes badge-pulse-ed {
+    0%, 100% { box-shadow: 0 0 8px rgba(190, 18, 60, 0.35); }
+    50% { box-shadow: 0 0 18px 4px rgba(190, 18, 60, 0.35); }
+}
+
+/* Focused state: main grid becomes 1 focused card + 2 small side cards */
+main[data-focus] {
+    grid-template-columns: 1fr;
+}
+
+main[data-focus] .algorithm-card {
+    opacity: 0.45;
+    transform: scale(0.92);
+    pointer-events: none;
+    max-height: 120px;
+    overflow: hidden;
+    padding: 1rem 1.5rem;
+}
+
+/* Hide plot controls, canvas expands, and stats in dimmed cards */
+main[data-focus] .algorithm-card .plot-controls,
+main[data-focus] .algorithm-card .canvas-container,
+main[data-focus] .algorithm-card .stats {
+    display: none;
+}
+
+/* Re-enable the card header so user can click badge to unfocus */
+main[data-focus] .algorithm-card .card-header {
+    pointer-events: auto;
+}
+
+/* The focused card itself */
+main[data-focus="ag"] .algorithm-card[data-algo="ag"],
+main[data-focus="pso"] .algorithm-card[data-algo="pso"],
+main[data-focus="ed"] .algorithm-card[data-algo="ed"] {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+    grid-column: 1 / -1;
+    max-height: none;
+    overflow: visible;
+    padding: 1.75rem;
+    order: -1;
+}
+
+main[data-focus="ag"] .algorithm-card[data-algo="ag"] .plot-controls,
+main[data-focus="ag"] .algorithm-card[data-algo="ag"] .canvas-container,
+main[data-focus="ag"] .algorithm-card[data-algo="ag"] .stats,
+main[data-focus="pso"] .algorithm-card[data-algo="pso"] .plot-controls,
+main[data-focus="pso"] .algorithm-card[data-algo="pso"] .canvas-container,
+main[data-focus="pso"] .algorithm-card[data-algo="pso"] .stats,
+main[data-focus="ed"] .algorithm-card[data-algo="ed"] .plot-controls,
+main[data-focus="ed"] .algorithm-card[data-algo="ed"] .canvas-container,
+main[data-focus="ed"] .algorithm-card[data-algo="ed"] .stats {
+    display: grid;
+}
+
+main[data-focus="ag"] .algorithm-card[data-algo="ag"] .canvas-container,
+main[data-focus="pso"] .algorithm-card[data-algo="pso"] .canvas-container,
+main[data-focus="ed"] .algorithm-card[data-algo="ed"] .canvas-container {
+    display: block;
+    height: clamp(350px, 50vw, 550px);
+}
+
+/* Dimmed cards sit side by side below the focused one */
+main[data-focus] {
+    grid-template-columns: 1fr 1fr;
+}
+
+main[data-focus="ag"] .algorithm-card[data-algo="ag"],
+main[data-focus="pso"] .algorithm-card[data-algo="pso"],
+main[data-focus="ed"] .algorithm-card[data-algo="ed"] {
+    grid-column: 1 / -1;
 }
 
 .charts-section {
@@ -777,11 +906,24 @@ main {
     main {
         grid-template-columns: 1fr 1fr;
     }
+    main[data-focus] {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 768px) {
     main {
         grid-template-columns: 1fr;
+    }
+
+    /* On mobile, hide dimmed cards entirely for focus mode */
+    main[data-focus] .algorithm-card {
+        display: none;
+    }
+    main[data-focus="ag"] .algorithm-card[data-algo="ag"],
+    main[data-focus="pso"] .algorithm-card[data-algo="pso"],
+    main[data-focus="ed"] .algorithm-card[data-algo="ed"] {
+        display: block;
     }
 
     .dashboard-header {
@@ -1344,4 +1486,400 @@ main {
 
 #mainTitle:hover {
     text-shadow: 0 0 30px rgba(245, 158, 11, 0.15);
+}
+
+/* ========================================
+   Benchmark Controls (Header Inline)
+   ======================================== */
+.benchmark-controls {
+    width: 100%;
+    justify-content: flex-end;
+}
+
+.benchmark-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.bench-param {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.bench-param input[type="range"] {
+    width: 70px;
+    margin: 0;
+    height: 4px;
+}
+
+.bench-label {
+    font-weight: 600;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.bench-value {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    min-width: 2ch;
+    text-align: right;
+    color: var(--text-primary);
+}
+
+.benchmark-btn {
+    background: linear-gradient(135deg, var(--accent-amber), #ea580c) !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    box-shadow: 0 8px 20px -10px var(--accent-glow-amber);
+}
+
+.benchmark-btn:hover {
+    box-shadow: 0 12px 28px -10px var(--accent-glow-amber);
+}
+
+.benchmark-status {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    justify-content: flex-end;
+}
+
+.bench-stop-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    border-color: var(--accent-rose) !important;
+    color: var(--accent-rose) !important;
+}
+
+.bench-stop-btn:hover {
+    background: var(--accent-rose) !important;
+    color: #fff !important;
+}
+
+.benchmark-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--border-color);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-teal), var(--accent-amber));
+    border-radius: 999px;
+    transition: width 0.15s ease;
+}
+
+.progress-label {
+    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* ========================================
+   Benchmark Results Modal
+   ======================================== */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.modal-overlay.show {
+    opacity: 1;
+}
+
+.modal-content {
+    position: relative;
+    width: min(92vw, 640px);
+    max-height: 90vh;
+    overflow-y: auto;
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.5);
+    transform: scale(0.9) translateY(20px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    padding: 0;
+}
+
+.modal-overlay.show .modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: var(--bg-soft);
+    color: var(--text-secondary);
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1;
+    padding: 0;
+    transition: background 0.2s, color 0.2s;
+}
+
+.modal-close:hover {
+    background: var(--accent-rose);
+    color: white;
+    transform: none;
+}
+
+.modal-header {
+    text-align: center;
+    padding: 2rem 2rem 1rem;
+}
+
+.trophy-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 0.5rem;
+    animation: trophy-bounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes trophy-bounce {
+    0% { transform: scale(0) rotate(-15deg); opacity: 0; }
+    60% { transform: scale(1.2) rotate(5deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+.modal-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.modal-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0.25rem 0 0;
+}
+
+.winner-banner {
+    margin: 0 1.5rem;
+    padding: 1rem 1.5rem;
+    border-radius: 16px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.3);
+    animation: banner-slide 0.5s ease 0.2s both;
+}
+
+@keyframes banner-slide {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+.winner-trophy {
+    font-size: 1.5rem;
+}
+
+.winner-label {
+    opacity: 0.85;
+    font-weight: 500;
+}
+
+.winner-name {
+    font-size: 1.25rem;
+}
+
+.winner-names {
+    font-size: 1.15rem;
+}
+
+.winner-wins {
+    font-size: 0.85rem;
+    opacity: 0.8;
+    font-weight: 400;
+}
+
+.modal-body {
+    padding: 1.5rem 2rem 2rem;
+}
+
+.modal-body h3 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent-teal);
+    margin: 1.25rem 0 0.75rem;
+    font-weight: 700;
+}
+
+.modal-body h3:first-child {
+    margin-top: 0;
+}
+
+/* Stats Table */
+.stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+.stats-table th,
+.stats-table td {
+    padding: 0.55rem 0.75rem;
+    text-align: right;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stats-table th {
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.stats-table th:first-child,
+.stats-table td:first-child {
+    text-align: left;
+}
+
+.stat-label {
+    font-family: var(--font-family);
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-variant-numeric: normal;
+}
+
+.stat-best {
+    font-weight: 700;
+    color: var(--accent-teal);
+}
+
+.wins-row td {
+    border-top: 2px solid var(--border-color);
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+/* Wins Chart Bars */
+.win-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.win-bar-label {
+    width: 120px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.win-bar-track {
+    flex: 1;
+    height: 28px;
+    background: var(--bg-soft);
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.win-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.6rem;
+    min-width: 32px;
+    transition: width 0.6s cubic-bezier(0.34, 1, 0.64, 1);
+    animation: bar-grow 0.6s cubic-bezier(0.34, 1, 0.64, 1) both;
+}
+
+@keyframes bar-grow {
+    0% { max-width: 0; }
+    100% { max-width: 100%; }
+}
+
+.win-bar-value {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #fff;
+    font-family: var(--font-mono);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Modal responsive */
+@media (max-width: 600px) {
+    .modal-content {
+        width: 98vw;
+        border-radius: 16px;
+    }
+
+    .modal-header {
+        padding: 1.5rem 1.25rem 0.75rem;
+    }
+
+    .modal-body {
+        padding: 1rem 1.25rem 1.5rem;
+    }
+
+    .winner-banner {
+        margin: 0 1rem;
+        flex-wrap: wrap;
+        text-align: center;
+    }
+
+    .win-bar-label {
+        width: 80px;
+        font-size: 0.75rem;
+    }
+
+    .stats-table {
+        font-size: 0.75rem;
+    }
 }
