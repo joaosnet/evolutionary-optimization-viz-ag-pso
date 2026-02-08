@@ -4,11 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AG vs PSO - Optimization Dashboard</title>
+    <title>AG vs PSO vs ED - Optimization Dashboard</title>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧬</text></svg>">
     <meta name="description"
-        content="Interactive visualization comparing Genetic Algorithm (AG) vs Particle Swarm Optimization (PSO) on benchmark functions">
+        content="Interactive visualization comparing Genetic Algorithm (AG) vs Particle Swarm Optimization (PSO) vs Differential Evolution (ED) on benchmark functions">
     <link rel="stylesheet" href="./static/css/style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive@0.100.0/dist/mathlive.min.css">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
@@ -23,7 +23,7 @@
             <div class="title-stack">
                 <p class="eyebrow" data-i18n="eyebrow">Live Optimization</p>
                 <h1 id="mainTitle" data-i18n="title">Optimization Showdown</h1>
-                <p class="subtitle" data-i18n="subtitle">AG vs PSO on Rastrigin Surface</p>
+                <p class="subtitle" data-i18n="subtitle">AG vs PSO vs ED on Rastrigin Surface</p>
                 <button id="reportBtn" class="ghost-btn report-btn hidden" title="Generate PDF Report">
                     📄 <span data-i18n="generate_report">Report</span>
                 </button>
@@ -229,6 +229,27 @@
                             oninput="document.getElementById('val-c2').innerText = this.value">
                     </label>
                 </div>
+
+                <!-- Differential Evolution Settings -->
+                <div class="setting-group">
+                    <h3 data-i18n="ed_title">Differential Evolution (ED)</h3>
+                    <label>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="ed_f">Scale Factor (F)</span>
+                            <span class="label-value" id="val-ed-f">0.8</span>
+                        </span>
+                        <input type="range" id="ed_f" min="0" max="2" step="0.05" value="0.8"
+                            oninput="document.getElementById('val-ed-f').innerText = this.value">
+                    </label>
+                    <label>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="ed_cr">Crossover Rate (CR)</span>
+                            <span class="label-value" id="val-ed-cr">0.9</span>
+                        </span>
+                        <input type="range" id="ed_cr" min="0" max="1" step="0.05" value="0.9"
+                            oninput="document.getElementById('val-ed-cr').innerText = this.value">
+                    </label>
+                </div>
             </div>
         </details>
 
@@ -304,6 +325,42 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ED Card -->
+            <div class="card algorithm-card">
+                <div class="card-header">
+                    <h2 data-i18n="ed_title">Differential Evolution</h2>
+                    <span class="badge ed-badge">ED</span>
+                </div>
+                <div class="plot-controls" aria-label="ED plot controls">
+                    <label>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="surface_opacity">Surface</span>
+                            <span class="label-value" id="val-ed-surface">0.45</span>
+                        </span>
+                        <input type="range" id="ed_surface_opacity" min="0" max="1" step="0.05" value="0.45"
+                            oninput="document.getElementById('val-ed-surface').innerText = this.value">
+                    </label>
+                    <label>
+                        <span class="label-line">
+                            <span class="label-text" data-i18n="point_size">Points</span>
+                            <span class="label-value" id="val-ed-points">5</span>
+                        </span>
+                        <input type="range" id="ed_point_size" min="2" max="10" step="0.5" value="5"
+                            oninput="document.getElementById('val-ed-points').innerText = this.value">
+                    </label>
+                </div>
+                <div class="canvas-container">
+                    <div id="edPlot" style="width:100%; height:100%;"></div>
+                </div>
+                <div class="stats">
+                    <div class="stat-item">
+                        <span class="label"><span data-i18n="best_value">Best Value</span> <span
+                                class="mode-tag best-mode-label">MAX</span></span>
+                        <span class="value" id="ed-score">Inf</span>
+                    </div>
+                </div>
+            </div>
         </main>
 
         <section class="charts-section">
@@ -326,6 +383,7 @@
     <script src="./static/js/algorithms/base.js"></script>
     <script src="./static/js/algorithms/ga.js"></script>
     <script src="./static/js/algorithms/pso.js"></script>
+    <script src="./static/js/algorithms/ed.js"></script>
     <script src="./static/js/benchmarks.js"></script>
     <!-- Main application -->
     <script src="./static/js/main.js"></script>

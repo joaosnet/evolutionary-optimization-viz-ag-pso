@@ -381,6 +381,13 @@ h2 {
     box-shadow: 0 0 8px var(--accent-glow-amber);
 }
 
+.ed-badge {
+    background-color: rgba(190, 18, 60, 0.12);
+    color: var(--accent-rose);
+    border: 1px solid var(--accent-rose);
+    box-shadow: 0 0 8px rgba(190, 18, 60, 0.35);
+}
+
 .canvas-container {
     width: 100%;
     height: clamp(260px, 38vw, 420px);
@@ -395,6 +402,7 @@ h2 {
 /* Target Plotly divs specifically */
 #agPlot,
 #psoPlot,
+#edPlot,
 #convergencePlot {
     width: 100% !important;
     height: 100% !important;
@@ -730,7 +738,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 /* Main Layout */
 main {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 2rem;
 }
 
@@ -762,6 +770,12 @@ main {
 @media (max-width: 1024px) {
     .dashboard-container {
         padding: 1.5rem;
+    }
+}
+
+@media (max-width: 1200px) {
+    main {
+        grid-template-columns: 1fr 1fr;
     }
 }
 

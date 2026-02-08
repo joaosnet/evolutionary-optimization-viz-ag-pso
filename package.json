@@ -1,0 +1,12 @@
+{
+  "name": "evolutionary-optimization-viz",
+  "version": "1.0.0",
+  "description": "Interactive visualization comparing AG, PSO and Differential Evolution (ED)",
+  "scripts": {
+    "test": "jest --verbose"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "license": "MIT"
+}

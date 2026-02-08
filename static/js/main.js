@@ -6,6 +6,7 @@
 // DOM Elements
 const agScoreEl = document.getElementById('ag-score');
 const psoScoreEl = document.getElementById('pso-score');
+const edScoreEl = document.getElementById('ed-score');
 const iterationEl = document.getElementById('iteration-display');
 const iterationValueEl = document.getElementById('iteration-value');
 const startBtn = document.getElementById('startBtn');
@@ -24,10 +25,12 @@ let simulationTimer = null;
 // Algorithm instances
 let gaInstance = null;
 let psoInstance = null;
+let edInstance = null;
 
 const historyCache = {
     ag: [],
-    pso: []
+    pso: [],
+    ed: []
 };
 
 const DEFAULT_EXPRESSION = '0.5 - ((sin(sqrt(x1^2 + x2^2))^2 - 0.5) / (1 + 0.001*(x1^2 + x2^2))^2)';
@@ -66,7 +69,7 @@ const translations = {
     en: {
         eyebrow: "Live Optimization",
         title: "Optimization Showdown",
-        subtitle: "AG vs PSO on Rastrigin Surface",
+        subtitle: "AG vs PSO vs ED on Rastrigin Surface",
         start: "Start",
         pause: "Pause",
         reset: "Reset",
@@ -93,6 +96,9 @@ const translations = {
         pso_w: "Inertia (w)",
         pso_c1: "Cognitive (c1)",
         pso_c2: "Social (c2)",
+        ed_title: "Differential Evolution",
+        ed_f: "Scale Factor (F)",
+        ed_cr: "Crossover Rate (CR)",
         best_value: "Best Value",
         convergence: "Convergence Comparison",
         iteration_axis: "Iteration",
@@ -106,6 +112,7 @@ const translations = {
         mode_target: "TARGET",
         ag_series: "Genetic Algorithm",
         pso_series: "Particle Swarm",
+        ed_series: "Differential Evolution",
         surface_opacity: "Surface",
         point_size: "Points",
         convergence_stop: "Stop on Convergence",
@@ -118,7 +125,7 @@ const translations = {
     pt: {
         eyebrow: "Otimização ao Vivo",
         title: "Batalha de Otimização",
-        subtitle: "AG vs PSO na Superfície Rastrigin",
+        subtitle: "AG vs PSO vs ED na Superfície Rastrigin",
         start: "Iniciar",
         pause: "Pausar",
         reset: "Resetar",
@@ -145,6 +152,9 @@ const translations = {
         pso_w: "Inércia (w)",
         pso_c1: "Cognitivo (c1)",
         pso_c2: "Social (c2)",
+        ed_title: "Evolução Diferencial",
+        ed_f: "Fator de Escala (F)",
+        ed_cr: "Taxa de Crossover (CR)",
         best_value: "Melhor Valor",
         convergence: "Comparação de Convergência",
         iteration_axis: "Iteração",
@@ -158,6 +168,7 @@ const translations = {
         mode_target: "ALVO",
         ag_series: "Algoritmo Genético",
         pso_series: "Enxame de Partículas",
+        ed_series: "Evolução Diferencial",
         surface_opacity: "Superfície",
         point_size: "Pontos",
         convergence_stop: "Parar ao Convergir",
@@ -394,7 +405,8 @@ const layoutConvergence = {
 function getSeriesNames() {
     return {
         ag: translations[currentLang].ag_series || 'Genetic Algorithm',
-        pso: translations[currentLang].pso_series || 'Particle Swarm'
+        pso: translations[currentLang].pso_series || 'Particle Swarm',
+        ed: translations[currentLang].ed_series || 'Differential Evolution'
     };
 }
 
@@ -470,6 +482,7 @@ function updateSurfaceTraces() {
     try {
         Plotly.restyle('agPlot', { z: [cachedSurfaceZ] }, [0]);
         Plotly.restyle('psoPlot', { z: [cachedSurfaceZ] }, [0]);
+        Plotly.restyle('edPlot', { z: [cachedSurfaceZ] }, [0]);
     } catch (e) {
         console.log('Plotly not ready');
     }
@@ -479,11 +492,14 @@ function initPlots() {
     const seriesNames = getSeriesNames();
     const agPointSize = getNumberValue('ag_point_size', 5);
     const psoPointSize = getNumberValue('pso_point_size', 5);
+    const edPointSize = getNumberValue('ed_point_size', 5);
     const agSurfaceOpacity = getNumberValue('ag_surface_opacity', 0.45);
     const psoSurfaceOpacity = getNumberValue('pso_surface_opacity', 0.45);
+    const edSurfaceOpacity = getNumberValue('ed_surface_opacity', 0.45);
     cachedSurfaceZ = getSurfaceZ();
     const agSurface = { ...surfaceTrace, z: cachedSurfaceZ, opacity: agSurfaceOpacity };
     const psoSurface = { ...surfaceTrace, z: cachedSurfaceZ, opacity: psoSurfaceOpacity };
+    const edSurface = { ...surfaceTrace, z: cachedSurfaceZ, opacity: edSurfaceOpacity };
 
     // AG 3D Plot
     Plotly.newPlot('agPlot', [agSurface, {
@@ -503,10 +519,20 @@ function initPlots() {
         name: seriesNames.pso
     }], layout3D, { responsive: true, displayModeBar: false });
 
+    // ED 3D Plot
+    Plotly.newPlot('edPlot', [edSurface, {
+        x: [], y: [], z: [],
+        mode: 'markers',
+        type: 'scatter3d',
+        marker: { size: edPointSize, color: '#be123c' },
+        name: seriesNames.ed
+    }], layout3D, { responsive: true, displayModeBar: false });
+
     // Convergence Plot
     Plotly.newPlot('convergencePlot', [
         { x: [], y: [], mode: 'lines', name: seriesNames.ag, line: { color: '#0f766e' } },
-        { x: [], y: [], mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } }
+        { x: [], y: [], mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } },
+        { x: [], y: [], mode: 'lines', name: seriesNames.ed, line: { color: '#be123c' } }
     ], layoutConvergence, { responsive: true, displayModeBar: false });
     updatePlotLanguage();
 }
@@ -575,9 +601,19 @@ function initAlgorithms() {
         convergenceWindow: convergenceWindow
     };
 
+    const edOptions = {
+        F: parseFloat(document.getElementById('ed_f')?.value) || 0.8,
+        CR: parseFloat(document.getElementById('ed_cr')?.value) || 0.9,
+        optimizationMode: getOptimizationMode(),
+        targetValue: getTargetValue(),
+        convergenceThreshold: convergenceEnabled ? convergenceThreshold : 0,
+        convergenceWindow: convergenceWindow
+    };
+
     try {
         gaInstance = new GeneticAlgorithm(fitnessFunc, bounds, popSize, currentDimensions, gaOptions);
         psoInstance = new ParticleSwarmOptimization(fitnessFunc, bounds, popSize, currentDimensions, psoOptions);
+        edInstance = new DifferentialEvolution(fitnessFunc, bounds, popSize, currentDimensions, edOptions);
         return true;
     } catch (e) {
         console.error('Failed to initialize algorithms:', e);
@@ -589,15 +625,17 @@ function initAlgorithms() {
  * Perform one simulation step
  */
 function simulationStep() {
-    if (!gaInstance || !psoInstance) return;
+    if (!gaInstance || !psoInstance || !edInstance) return;
 
-    // Step both algorithms
+    // Step all algorithms
     gaInstance.step();
     psoInstance.step();
+    edInstance.step();
 
     // Get states
     const agState = gaInstance.getState();
     const psoState = psoInstance.getState();
+    const edState = edInstance.getState();
 
     // Update dashboard
     updateDashboard({
@@ -610,6 +648,11 @@ function simulationStep() {
             ...psoState,
             best_score: psoState.bestScore,
             max_iteration: psoState.maxIteration
+        },
+        ed: {
+            ...edState,
+            best_score: edState.bestScore,
+            max_iteration: edState.maxIteration
         }
     });
 
@@ -633,6 +676,9 @@ function updateDashboard(data) {
     }
     if (data?.pso && Number.isFinite(data.pso.iteration)) {
         historyCache.pso[data.pso.iteration] = data.pso.best_score;
+    }
+    if (data?.ed && Number.isFinite(data.ed.iteration)) {
+        historyCache.ed[data.ed.iteration] = data.ed.best_score;
     }
     if (data?.ag?.max_iteration !== undefined) {
         updateSeekControls(data.ag.max_iteration, data.ag.iteration);
@@ -676,15 +722,34 @@ function updateDashboard(data) {
         Plotly.react('psoPlot', psoData, document.getElementById('psoPlot').layout);
     }
 
+    if (data.ed) {
+        edScoreEl.textContent = Number.isFinite(data.ed.best_score) ? data.ed.best_score.toFixed(4) : "Inf";
+
+        const edX = data.ed.population.map(p => p[0]);
+        const edY = data.ed.population.map(p => p[1]);
+        const edZ = data.ed.population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))));
+
+        const edData = [{ ...surfaceTrace, z: cachedSurfaceZ, opacity: getNumberValue('ed_surface_opacity', 0.45) }, {
+            x: edX, y: edY, z: edZ,
+            mode: 'markers',
+            type: 'scatter3d',
+            marker: { size: getNumberValue('ed_point_size', 5), color: '#be123c' },
+            name: getSeriesNames().ed
+        }];
+
+        Plotly.react('edPlot', edData, document.getElementById('edPlot').layout);
+    }
+
     // Update Convergence Chart
-    if (data.ag && data.pso) {
+    if (data.ag && data.pso && data.ed) {
         renderConvergence(data.ag.iteration);
 
         // Check for convergence and auto-stop
         const agConverged = data.ag.converged === true;
         const psoConverged = data.pso.converged === true;
+        const edConverged = data.ed.converged === true;
 
-        if (agConverged || psoConverged) {
+        if (agConverged || psoConverged || edConverged) {
             const convergenceEnabledEl = document.getElementById('convergence_enabled');
             if (convergenceEnabledEl && convergenceEnabledEl.checked && isRunning) {
                 isRunning = false;
@@ -693,8 +758,11 @@ function updateDashboard(data) {
 
                 // Show convergence notification
                 const convergedMsg = translations[currentLang].converged_msg || 'Converged!';
-                const who = agConverged && psoConverged ? 'AG & PSO' :
-                    agConverged ? 'AG' : 'PSO';
+                const parts = [];
+                if (agConverged) parts.push('AG');
+                if (psoConverged) parts.push('PSO');
+                if (edConverged) parts.push('ED');
+                const who = parts.join(' & ');
                 if (functionErrorEl) {
                     functionErrorEl.textContent = `✓ ${who} ${convergedMsg}`;
                     functionErrorEl.classList.add('success-message');
@@ -719,7 +787,7 @@ function toggleSimulation() {
     updateStartBtnText();
 
     if (isRunning) {
-        if (!gaInstance || !psoInstance) {
+        if (!gaInstance || !psoInstance || !edInstance) {
             if (!initAlgorithms()) {
                 isRunning = false;
                 updateStartBtnText();
@@ -763,36 +831,41 @@ function resetSimulation() {
 
     // Reset Plots
     try {
-        Plotly.deleteTraces('convergencePlot', [0, 1]);
+        Plotly.deleteTraces('convergencePlot', [0, 1, 2]);
         const seriesNames = getSeriesNames();
         Plotly.addTraces('convergencePlot', [
             { x: [], y: [], mode: 'lines', name: seriesNames.ag, line: { color: '#0f766e' } },
-            { x: [], y: [], mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } }
+            { x: [], y: [], mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } },
+            { x: [], y: [], mode: 'lines', name: seriesNames.ed, line: { color: '#be123c' } }
         ]);
     } catch (e) {
         console.log('Plotly not ready');
     }
 
     // Show initial state
-    if (gaInstance && psoInstance) {
+    if (gaInstance && psoInstance && edInstance) {
         const agState = gaInstance.getState();
         const psoState = psoInstance.getState();
+        const edState = edInstance.getState();
         updateDashboard({
             ag: { ...agState, best_score: agState.bestScore, max_iteration: agState.maxIteration },
-            pso: { ...psoState, best_score: psoState.bestScore, max_iteration: psoState.maxIteration }
+            pso: { ...psoState, best_score: psoState.bestScore, max_iteration: psoState.maxIteration },
+            ed: { ...edState, best_score: edState.bestScore, max_iteration: edState.maxIteration }
         });
     }
 }
 
 function seekToIteration(iteration) {
-    if (!gaInstance || !psoInstance) return;
+    if (!gaInstance || !psoInstance || !edInstance) return;
 
     const agState = gaInstance.getStateAt(iteration);
     const psoState = psoInstance.getStateAt(iteration);
+    const edState = edInstance.getStateAt(iteration);
 
-    if (agState && psoState) {
+    if (agState && psoState && edState) {
         gaInstance.restoreState(agState);
         psoInstance.restoreState(psoState);
+        edInstance.restoreState(edState);
 
         updateDashboard({
             ag: {
@@ -806,6 +879,12 @@ function seekToIteration(iteration) {
                 best_score: psoState.bestScore,
                 iteration: psoState.iteration,
                 max_iteration: psoInstance.history.length - 1
+            },
+            ed: {
+                ...edState,
+                best_score: edState.bestScore,
+                iteration: edState.iteration,
+                max_iteration: edInstance.history.length - 1
             }
         });
     }
@@ -825,7 +904,11 @@ function stepBackward() {
 
 function continueSimulation() {
     // Restore to max iteration first
-    const maxIter = Math.max(gaInstance?.history?.length - 1 || 0, 0);
+    const maxIter = Math.max(
+        gaInstance?.history?.length - 1 || 0,
+        psoInstance?.history?.length - 1 || 0,
+        edInstance?.history?.length - 1 || 0
+    );
     if (maxIter > currentIteration) {
         seekToIteration(maxIter);
     }
@@ -855,6 +938,7 @@ function updateNavigationButtons(current, maxIter) {
 function resetHistoryCache() {
     historyCache.ag = [];
     historyCache.pso = [];
+    historyCache.ed = [];
     maxComputedIteration = 0;
     renderConvergence(0);
 }
@@ -864,18 +948,21 @@ function renderConvergence(iteration) {
     const xValues = [];
     const agValues = [];
     const psoValues = [];
+    const edValues = [];
 
     for (let i = 0; i <= iteration; i += 1) {
-        if (historyCache.ag[i] === undefined || historyCache.pso[i] === undefined) continue;
+        if (historyCache.ag[i] === undefined || historyCache.pso[i] === undefined || historyCache.ed[i] === undefined) continue;
         xValues.push(i);
         agValues.push(historyCache.ag[i]);
         psoValues.push(historyCache.pso[i]);
+        edValues.push(historyCache.ed[i]);
     }
 
     try {
         Plotly.react('convergencePlot', [
             { x: xValues, y: agValues, mode: 'lines', name: seriesNames.ag, line: { color: '#0f766e' } },
-            { x: xValues, y: psoValues, mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } }
+            { x: xValues, y: psoValues, mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } },
+            { x: xValues, y: edValues, mode: 'lines', name: seriesNames.ed, line: { color: '#be123c' } }
         ], layoutConvergence, { responsive: true, displayModeBar: false });
     } catch (e) {
         console.log('Plotly not ready');
@@ -962,6 +1049,7 @@ function updatePlotColors(theme) {
     try {
         if (document.getElementById('agPlot').data) Plotly.relayout('agPlot', update);
         if (document.getElementById('psoPlot').data) Plotly.relayout('psoPlot', update);
+        if (document.getElementById('edPlot').data) Plotly.relayout('edPlot', update);
         if (document.getElementById('convergencePlot').data) Plotly.relayout('convergencePlot', update);
     } catch (e) { console.log("Plotly not ready"); }
 }
@@ -988,14 +1076,18 @@ if (langToggleBtn) {
 function updatePlotControls() {
     const agSurfaceOpacity = getNumberValue('ag_surface_opacity', 0.45);
     const psoSurfaceOpacity = getNumberValue('pso_surface_opacity', 0.45);
+    const edSurfaceOpacity = getNumberValue('ed_surface_opacity', 0.45);
     const agPointSize = getNumberValue('ag_point_size', 5);
     const psoPointSize = getNumberValue('pso_point_size', 5);
+    const edPointSize = getNumberValue('ed_point_size', 5);
 
     try {
         Plotly.restyle('agPlot', { opacity: agSurfaceOpacity }, [0]);
         Plotly.restyle('agPlot', { 'marker.size': agPointSize }, [1]);
         Plotly.restyle('psoPlot', { opacity: psoSurfaceOpacity }, [0]);
         Plotly.restyle('psoPlot', { 'marker.size': psoPointSize }, [1]);
+        Plotly.restyle('edPlot', { opacity: edSurfaceOpacity }, [0]);
+        Plotly.restyle('edPlot', { 'marker.size': edPointSize }, [1]);
     } catch (e) {
         console.log('Plotly not ready');
     }
@@ -1006,7 +1098,9 @@ function initPlotControls() {
         'ag_surface_opacity',
         'ag_point_size',
         'pso_surface_opacity',
-        'pso_point_size'
+        'pso_point_size',
+        'ed_surface_opacity',
+        'ed_point_size'
     ];
 
     controlIds.forEach(id => {
@@ -1068,8 +1162,8 @@ function updatePlotLanguage() {
             'xaxis.title.text': iterationLabel
         });
         Plotly.restyle('convergencePlot', {
-            name: [seriesNames.ag, seriesNames.pso]
-        }, [0, 1]);
+            name: [seriesNames.ag, seriesNames.pso, seriesNames.ed]
+        }, [0, 1, 2]);
     } catch (e) {
         console.log('Plotly not ready');
     }
@@ -1083,10 +1177,12 @@ function resizePlots() {
         try {
             const agPlot = document.getElementById('agPlot');
             const psoPlot = document.getElementById('psoPlot');
+            const edPlot = document.getElementById('edPlot');
             const convergencePlot = document.getElementById('convergencePlot');
 
             if (agPlot) Plotly.Plots.resize(agPlot);
             if (psoPlot) Plotly.Plots.resize(psoPlot);
+            if (edPlot) Plotly.Plots.resize(edPlot);
             if (convergencePlot) Plotly.Plots.resize(convergencePlot);
         } catch (e) {
             console.log('Plotly not ready');
@@ -1128,13 +1224,14 @@ async function generatePdfReport() {
         // Capture images (awaiting promises)
         const agImg = await Plotly.toImage(document.getElementById('agPlot'), { format: 'png', width: 500, height: 400 });
         const psoImg = await Plotly.toImage(document.getElementById('psoPlot'), { format: 'png', width: 500, height: 400 });
+        const edImg = await Plotly.toImage(document.getElementById('edPlot'), { format: 'png', width: 500, height: 400 });
         const convImg = await Plotly.toImage(document.getElementById('convergencePlot'), { format: 'png', width: 600, height: 350 });
 
         const doc = new jsPDF();
         
         // Set PDF metadata
         doc.setProperties({
-            title: 'Comparação entre AG e PSO - Relatório SBC',
+            title: 'Comparação entre AG, PSO e ED - Relatório SBC',
             subject: 'Relatório Técnico - Template SBC',
             author: 'João da Cruz de Natividade e Silva Neto',
             creator: 'Evolutionary Optimization Viz'
@@ -1295,6 +1392,8 @@ async function generatePdfReport() {
                 pso_w: parseFloat(document.getElementById('pso_w')?.value) || 0.5,
                 pso_c1: parseFloat(document.getElementById('pso_c1')?.value) || 1.5,
                 pso_c2: parseFloat(document.getElementById('pso_c2')?.value) || 1.5,
+                ed_f: parseFloat(document.getElementById('ed_f')?.value) || 0.8,
+                ed_cr: parseFloat(document.getElementById('ed_cr')?.value) || 0.9,
                 optimization_mode: getOptimizationMode(),
                 target_value: getTargetValue(),
                 function_expr: currentExpression,
@@ -1308,8 +1407,13 @@ async function generatePdfReport() {
                 best_score: historyCache.pso.length > 0 ? historyCache.pso[historyCache.pso.length - 1] : null,
                 iteration: currentIteration
             },
+            ed: {
+                best_score: historyCache.ed.length > 0 ? historyCache.ed[historyCache.ed.length - 1] : null,
+                iteration: currentIteration
+            },
             history_ag: historyCache.ag,
-            history_pso: historyCache.pso
+            history_pso: historyCache.pso,
+            history_ed: historyCache.ed
         };
 
         const modeLabels = { min: 'Minimização', max: 'Maximização', target: `Valor Alvo (${data.params.target_value})` };
@@ -1320,7 +1424,7 @@ async function generatePdfReport() {
         // 1. Title Area (Full Width - SBC Style: 14pt bold centered)
         doc.setFont('times', 'bold');
         doc.setFontSize(14);
-        doc.text('Comparação entre Algoritmo Genético e PSO', pageWidth / 2, cursorY, { align: 'center' });
+        doc.text('Comparação entre Algoritmo Genético, PSO e ED', pageWidth / 2, cursorY, { align: 'center' });
         cursorY += 6;
         doc.text('na Otimização de Funções Multimodais', pageWidth / 2, cursorY, { align: 'center' });
         cursorY += 12;
@@ -1349,26 +1453,29 @@ async function generatePdfReport() {
         const absWidth = contentWidth - (absIndent * 2);
 
         // Construct dynamic abstract text
-        const maxIter = Math.max(data.ag.iteration, data.pso.iteration);
-        let winnerText = "ambos os algoritmos obtiveram desempenho similar";
-        let winnerTextEN = "both algorithms performed similarly";
+        const maxIter = Math.max(data.ag.iteration, data.pso.iteration, data.ed.iteration);
+        let winnerText = "todos os algoritmos obtiveram desempenho similar";
+        let winnerTextEN = "all algorithms performed similarly";
         const agBest = data.ag.best_score || 0;
         const psoBest = data.pso.best_score || 0;
+        const edBest = data.ed.best_score || 0;
 
+        // Determine winner among 3 algorithms
+        const scores = [{ name: 'AG', nameEN: 'GA', score: agBest }, { name: 'PSO', nameEN: 'PSO', score: psoBest }, { name: 'ED', nameEN: 'DE', score: edBest }];
         if (data.params.optimization_mode === 'max') {
-            if (agBest > psoBest) { winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho"; winnerTextEN = "the Genetic Algorithm (GA) outperformed PSO"; }
-            else if (psoBest > agBest) { winnerText = "o PSO obteve melhor desempenho"; winnerTextEN = "PSO outperformed the Genetic Algorithm"; }
+            scores.sort((a, b) => b.score - a.score);
         } else if (data.params.optimization_mode === 'min') {
-            if (agBest < psoBest) { winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho"; winnerTextEN = "the Genetic Algorithm (GA) outperformed PSO"; }
-            else if (psoBest < agBest) { winnerText = "o PSO obteve melhor desempenho"; winnerTextEN = "PSO outperformed the Genetic Algorithm"; }
-        } else { // Target
-            const agDiff = Math.abs(agBest - data.params.target_value);
-            const psoDiff = Math.abs(psoBest - data.params.target_value);
-            if (agDiff < psoDiff) { winnerText = "o Algoritmo Genético (AG) obteve melhor desempenho"; winnerTextEN = "the Genetic Algorithm (GA) outperformed PSO"; }
-            else if (psoDiff < agDiff) { winnerText = "o PSO obteve melhor desempenho"; winnerTextEN = "PSO outperformed the Genetic Algorithm"; }
+            scores.sort((a, b) => a.score - b.score);
+        } else {
+            scores.forEach(s => s.diff = Math.abs(s.score - data.params.target_value));
+            scores.sort((a, b) => a.diff - b.diff);
+        }
+        if (scores[0].score !== scores[1].score) {
+            winnerText = `o ${scores[0].name} obteve melhor desempenho`;
+            winnerTextEN = `${scores[0].nameEN} outperformed the others`;
         }
 
-        const absTextPT = `Este trabalho apresenta uma análise comparativa entre o Algoritmo Genético (AG) com representação real e a Otimização por Enxame de Partículas (PSO) aplicados à otimização de funções multimodais. A simulação foi executada com ${maxIter} iterações, utilizando uma população de ${data.params.pop_size} indivíduos/partículas. Os resultados demonstram que ${winnerText}. O projeto foi desenvolvido com assistência de Inteligência Artificial (IA).`;
+        const absTextPT = `Este trabalho apresenta uma análise comparativa entre o Algoritmo Genético (AG) com representação real, a Otimização por Enxame de Partículas (PSO) e a Evolução Diferencial (ED) aplicados à otimização de funções multimodais. A simulação foi executada com ${maxIter} iterações, utilizando uma população de ${data.params.pop_size} indivíduos/partículas. Os resultados demonstram que ${winnerText}. O projeto foi desenvolvido com assistência de Inteligência Artificial (IA).`;
 
         // RESUMO
         doc.setFont('times', 'bold');
@@ -1384,11 +1491,11 @@ async function generatePdfReport() {
         // Keywords PT
         doc.setFont('times', 'normal');
         doc.setFontSize(10);
-        doc.text('Palavras-chave: Algoritmo Genético, PSO, Otimização, Inteligência Artificial', marginLeft + absIndent, cursorY);
+        doc.text('Palavras-chave: Algoritmo Genético, PSO, Evolução Diferencial, Otimização, Inteligência Artificial', marginLeft + absIndent, cursorY);
         cursorY += 10;
 
         // ABSTRACT
-        const absTextEN = `This paper presents a comparative analysis between the real-coded Genetic Algorithm (GA) and Particle Swarm Optimization (PSO) applied to multimodal function optimization. The simulation ran for ${maxIter} iterations with a population of ${data.params.pop_size} individuals/particles. Results show that ${winnerTextEN}. This project was developed with AI assistance.`;
+        const absTextEN = `This paper presents a comparative analysis between the real-coded Genetic Algorithm (GA), Particle Swarm Optimization (PSO) and Differential Evolution (DE) applied to multimodal function optimization. The simulation ran for ${maxIter} iterations with a population of ${data.params.pop_size} individuals/particles. Results show that ${winnerTextEN}. This project was developed with AI assistance.`;
 
         doc.setFont('times', 'bold');
         doc.setFontSize(12);
@@ -1402,7 +1509,7 @@ async function generatePdfReport() {
 
         // Keywords EN
         doc.setFont('times', 'normal');
-        doc.text('Keywords: Genetic Algorithm, PSO, Optimization, Artificial Intelligence', marginLeft + absIndent, cursorY);
+        doc.text('Keywords: Genetic Algorithm, PSO, Differential Evolution, Optimization, Artificial Intelligence', marginLeft + absIndent, cursorY);
         cursorY += 15;
 
         // Lock column start after abstracts
@@ -1411,7 +1518,7 @@ async function generatePdfReport() {
         // --- Start Columns ---
         // 1. Introdução
         addSectionHeading('1. Introdução');
-        addText('A otimização de funções multimodais representa um desafio significativo. Este relatório compara dois algoritmos metaheurísticos populares: AG e PSO.');
+        addText('A otimização de funções multimodais representa um desafio significativo. Este relatório compara três algoritmos metaheurísticos populares: AG, PSO e ED.');
 
         addSubsectionHeading('1.1 Função Objetivo');
         addText(`Função: f(x) = ${data.params.function_expr}`);
@@ -1422,7 +1529,7 @@ async function generatePdfReport() {
 
         // 2. Fundamentação Teórica
         addSectionHeading('2. Fundamentação Teórica');
-        addText('O Algoritmo Genético (AG) utiliza seleção por torneio, crossover BLX-alpha e mutação gaussiana. O PSO utiliza a formulação canônica com inércia.');
+        addText('O Algoritmo Genético (AG) utiliza seleção por torneio, crossover BLX-alpha e mutação gaussiana. O PSO utiliza a formulação canônica com inércia. A Evolução Diferencial (ED) utiliza a estratégia DE/rand/1/bin com crossover binomial.');
 
         // 3. Configuração Experimental (Table)
         addSectionHeading('3. Configuração Experimental');
@@ -1434,14 +1541,15 @@ async function generatePdfReport() {
         const table1Y = cursorY;
         doc.autoTable({
             startY: table1Y,
-            head: [['Parâmetro', 'AG', 'PSO']],
+            head: [['Parâmetro', 'AG', 'PSO', 'ED']],
             body: [
-                ['População', data.params.pop_size, data.params.pop_size],
-                ['Mutação', data.params.ag_mutation, '--'],
-                ['Crossover', data.params.ag_crossover, '--'],
-                ['Inércia (w)', '--', data.params.pso_w],
-                ['Cognitivo (c1)', '--', data.params.pso_c1],
-                ['Social (c2)', '--', data.params.pso_c2]
+                ['População', data.params.pop_size, data.params.pop_size, data.params.pop_size],
+                ['Mutação', data.params.ag_mutation, '--', '--'],
+                ['Crossover', data.params.ag_crossover, '--', data.params.ed_cr],
+                ['Inércia (w)', '--', data.params.pso_w, '--'],
+                ['Cognitivo (c1)', '--', data.params.pso_c1, '--'],
+                ['Social (c2)', '--', data.params.pso_c2, '--'],
+                ['Fator F', '--', '--', data.params.ed_f]
             ],
             theme: 'grid',
             headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, lineWidth: 0.3 },
@@ -1456,6 +1564,7 @@ async function generatePdfReport() {
         // Add 3D Plots
         addImage(agImg, 'População Final (AG)', 50);
         addImage(psoImg, 'População Final (PSO)', 50);
+        addImage(edImg, 'População Final (ED)', 50);
 
         // 4. Resultados
         addSectionHeading('4. Resultados Experimentais');
@@ -1464,10 +1573,10 @@ async function generatePdfReport() {
         checkSpace(25); // Estimate table height
         doc.autoTable({
             startY: cursorY,
-            head: [['Métrica', 'AG', 'PSO']],
+            head: [['Métrica', 'AG', 'PSO', 'ED']],
             body: [
-                ['Melhor Fitness', (data.ag.best_score?.toFixed(6) || 'N/A'), (data.pso.best_score?.toFixed(6) || 'N/A')],
-                ['Iterações', data.ag.iteration, data.pso.iteration]
+                ['Melhor Fitness', (data.ag.best_score?.toFixed(6) || 'N/A'), (data.pso.best_score?.toFixed(6) || 'N/A'), (data.ed.best_score?.toFixed(6) || 'N/A')],
+                ['Iterações', data.ag.iteration, data.pso.iteration, data.ed.iteration]
             ],
             theme: 'grid',
             headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, lineWidth: 0.3 },
@@ -1488,13 +1597,14 @@ async function generatePdfReport() {
         for (let i = 0; i < total; i += step) {
             const agV = data.history_ag[i];
             const psoV = data.history_pso[i];
-            if (agV !== undefined && psoV !== undefined) {
-                convRows.push([i, agV.toFixed(4), psoV.toFixed(4)]);
+            const edV = data.history_ed[i];
+            if (agV !== undefined && psoV !== undefined && edV !== undefined) {
+                convRows.push([i, agV.toFixed(4), psoV.toFixed(4), edV.toFixed(4)]);
             }
         }
         if (total > 0 && (total - 1) % step !== 0) {
             const i = total - 1;
-            convRows.push([i, data.history_ag[i].toFixed(4), data.history_pso[i].toFixed(4)]);
+            convRows.push([i, data.history_ag[i].toFixed(4), data.history_pso[i].toFixed(4), data.history_ed[i].toFixed(4)]);
         }
 
         // Check space for convergence table (estimate rows * 5mm + header)
@@ -1502,7 +1612,7 @@ async function generatePdfReport() {
         
         doc.autoTable({
             startY: cursorY,
-            head: [['Iteração', 'AG', 'PSO']],
+            head: [['Iteração', 'AG', 'PSO', 'ED']],
             body: convRows,
             theme: 'grid',
             headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8, lineWidth: 0.3 },
@@ -1519,7 +1629,7 @@ async function generatePdfReport() {
 
         // 5. Implementação
         addSectionHeading('5. Implementação');
-        addText('O backend em FastAPI executa AG/PSO e expõe uma API para geração de relatório. O frontend em JavaScript usa Plotly para os gráficos 3D e convergência, enviando parâmetros via interface interativa.');
+        addText('O backend em FastAPI executa AG/PSO/ED e expõe uma API para geração de relatório. O frontend em JavaScript usa Plotly para os gráficos 3D e convergência, enviando parâmetros via interface interativa.');
         addSubsectionHeading('5.1 Integração');
         addBullet('WebSocket para streaming de estados e histórico.');
         addBullet('Expressões validadas com math.js/numexpr.');
@@ -1542,17 +1652,23 @@ async function generatePdfReport() {
         addBullet('Convergência rápida');
         addBullet('Comportamento de enxame');
 
+        addSubsectionHeading('6.3 ED');
+        addBullet('Poucos parâmetros de controle');
+        addBullet('Robusto em funções multimodais');
+        addBullet('Operação de mutação diferencial eficiente');
+
         // 7. Conclusões
         addSectionHeading('7. Conclusões');
-        addBullet('Ambos são eficazes.');
+        addBullet('Os três algoritmos são eficazes.');
         addBullet('PSO: velocidade inicial.');
         addBullet('AG: robustez a longo prazo.');
+        addBullet('ED: eficiência com poucos parâmetros.');
 
         // 8. Disponibilidade
         addSectionHeading('8. Disponibilidade');
         addText('A simulação interativa está disponível em:');
         doc.setTextColor(0, 0, 255);
-        addText('https://joaosnet.github.io/evolutionary-optimization-viz-ag-pso/', 9, 'normal');
+        addText('https://joaosnet.github.io/evolutionary-optimization-viz/', 9, 'normal');
         doc.setTextColor(0, 0, 0);
 
         // 9. Referências (SBC Style)
@@ -1561,7 +1677,8 @@ async function generatePdfReport() {
         addText('[1] Holland, J. H. (1992). Adaptation in Natural and Artificial Systems. MIT Press.', 9);
         addText('[2] Kennedy, J. and Eberhart, R. (1995). Particle Swarm Optimization. In IEEE Intl. Conf. on Neural Networks.', 9);
         addText('[3] Goldberg, D. E. (1989). Genetic Algorithms in Search, Optimization, and Machine Learning. Addison-Wesley.', 9);
-        addText('[4] Eberhart, R. C. and Shi, Y. (2001). Particle swarm optimization: developments, applications and resources. In Congress on Evolutionary Computation.', 9);
+        addText('[4] Storn, R. and Price, K. (1997). Differential Evolution – A Simple and Efficient Heuristic for Global Optimization over Continuous Spaces. Journal of Global Optimization, 11(4), 341-359.', 9);
+        addText('[5] Eberhart, R. C. and Shi, Y. (2001). Particle swarm optimization: developments, applications and resources. In Congress on Evolutionary Computation.', 9);
 
         // Footer: Data geração
         cursorY += 10;
@@ -1571,7 +1688,7 @@ async function generatePdfReport() {
         doc.setTextColor(0, 0, 0);
 
         // Save PDF
-        doc.save('relatorio_sbc_ag_pso.pdf');
+        doc.save('relatorio_sbc_ag_pso_ed.pdf');
 
     } catch (err) {
         console.error('PDF generation failed:', err);
@@ -1656,9 +1773,11 @@ window.onload = () => {
         if (initAlgorithms()) {
             const agState = gaInstance.getState();
             const psoState = psoInstance.getState();
+            const edState = edInstance.getState();
             updateDashboard({
                 ag: { ...agState, best_score: agState.bestScore, max_iteration: agState.maxIteration },
-                pso: { ...psoState, best_score: psoState.bestScore, max_iteration: psoState.maxIteration }
+                pso: { ...psoState, best_score: psoState.bestScore, max_iteration: psoState.maxIteration },
+                ed: { ...edState, best_score: edState.bestScore, max_iteration: edState.maxIteration }
             });
         }
     }, 100);
