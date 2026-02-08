@@ -678,7 +678,7 @@ const REPORT_SECTIONS = [
         id: 'introducao',
         title: '1. Introdução',
         render(ctx) {
-            const { layout, data } = ctx;
+            const { layout, data, images } = ctx;
             const keys = data.enabledKeys;
 
             layout.addSectionHeading('1. Introdução');
