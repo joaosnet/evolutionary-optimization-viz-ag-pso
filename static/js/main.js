@@ -153,6 +153,7 @@ const translations = {
         ed_cr: "Crossover Rate (CR)",
         best_value: "Best Value",
         convergence: "Convergence Comparison",
+        webgl_disabled_msg: "WebGL is disabled — using 2D fallbacks. Some features may be limited.",
         iteration_axis: "Iteration",
         fitness_axis: "Fitness",
         objective_axis: "Objective",
@@ -227,6 +228,7 @@ const translations = {
         ed_cr: "Taxa de Crossover (CR)",
         best_value: "Melhor Valor",
         convergence: "Comparação de Convergência",
+        webgl_disabled_msg: "WebGL está desabilitado — usando visualização 2D. Algumas funcionalidades podem estar limitadas.",
         iteration_axis: "Iteração",
         fitness_axis: "Fitness",
         objective_axis: "Objetivo",
@@ -490,6 +492,44 @@ const layoutConvergence = {
     }
 };
 
+// WebGL detection + 2D fallback layout
+function isWebGLAvailable() {
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        return !!gl;
+    } catch (e) {
+        return false;
+    }
+}
+
+const WEBGL_AVAILABLE = isWebGLAvailable();
+
+const layout2D = {
+    autosize: true,
+    margin: { l: 50, r: 25, b: 45, t: 10 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    xaxis: { title: '' },
+    yaxis: { title: '' }
+};
+
+const surface2DTrace = {
+    z: base_z_data,
+    x: x_range,
+    y: y_range,
+    type: 'heatmap',
+    colorscale: 'Viridis',
+    showscale: false
+};
+
+function showWebGLNotice() {
+    if (!WEBGL_AVAILABLE && functionErrorEl) {
+        functionErrorEl.textContent = translations[currentLang].webgl_disabled_msg || 'WebGL is disabled — using 2D fallbacks.';
+        functionErrorEl.classList.add('warning-message');
+    }
+} 
+
 function getSeriesNames() {
     return {
         ag: translations[currentLang].ag_series || 'Genetic Algorithm',
@@ -497,6 +537,12 @@ function getSeriesNames() {
         ed: translations[currentLang].ed_series || 'Differential Evolution'
     };
 }
+
+// Call webgl notice early so users see fallback info
+if (typeof window !== 'undefined') {
+    // show the notice when script loads; window.onload will also call initPlots
+    showWebGLNotice();
+} 
 
 function getNumberValue(id, fallback) {
     const el = document.getElementById(id);
@@ -585,45 +631,58 @@ function initPlots() {
     const psoSurfaceOpacity = getNumberValue('pso_surface_opacity', 0.45);
     const edSurfaceOpacity = getNumberValue('ed_surface_opacity', 0.45);
     cachedSurfaceZ = getSurfaceZ();
-    const agSurface = { ...surfaceTrace, z: cachedSurfaceZ, opacity: agSurfaceOpacity };
-    const psoSurface = { ...surfaceTrace, z: cachedSurfaceZ, opacity: psoSurfaceOpacity };
-    const edSurface = { ...surfaceTrace, z: cachedSurfaceZ, opacity: edSurfaceOpacity };
 
-    // AG 3D Plot
-    Plotly.newPlot('agPlot', [agSurface, {
-        x: [], y: [], z: [],
-        mode: 'markers',
-        type: 'scatter3d',
-        marker: { size: agPointSize, color: '#0f766e' },
-        name: seriesNames.ag
-    }], layout3D, { responsive: true, displayModeBar: false });
+    if (WEBGL_AVAILABLE) {
+        const agSurface = { ...surfaceTrace, z: cachedSurfaceZ, opacity: agSurfaceOpacity };
+        const psoSurface = { ...surfaceTrace, z: cachedSurfaceZ, opacity: psoSurfaceOpacity };
+        const edSurface = { ...surfaceTrace, z: cachedSurfaceZ, opacity: edSurfaceOpacity };
 
-    // PSO 3D Plot
-    Plotly.newPlot('psoPlot', [psoSurface, {
-        x: [], y: [], z: [],
-        mode: 'markers',
-        type: 'scatter3d',
-        marker: { size: psoPointSize, color: '#d97706' },
-        name: seriesNames.pso
-    }], layout3D, { responsive: true, displayModeBar: false });
+        // AG 3D Plot
+        Plotly.newPlot('agPlot', [agSurface, {
+            x: [], y: [], z: [],
+            mode: 'markers',
+            type: 'scatter3d',
+            marker: { size: agPointSize, color: '#0f766e' },
+            name: seriesNames.ag
+        }], layout3D, { responsive: true, displayModeBar: false });
 
-    // ED 3D Plot
-    Plotly.newPlot('edPlot', [edSurface, {
-        x: [], y: [], z: [],
-        mode: 'markers',
-        type: 'scatter3d',
-        marker: { size: edPointSize, color: '#be123c' },
-        name: seriesNames.ed
-    }], layout3D, { responsive: true, displayModeBar: false });
+        // PSO 3D Plot
+        Plotly.newPlot('psoPlot', [psoSurface, {
+            x: [], y: [], z: [],
+            mode: 'markers',
+            type: 'scatter3d',
+            marker: { size: psoPointSize, color: '#d97706' },
+            name: seriesNames.pso
+        }], layout3D, { responsive: true, displayModeBar: false });
 
-    // Convergence Plot
+        // ED 3D Plot
+        Plotly.newPlot('edPlot', [edSurface, {
+            x: [], y: [], z: [],
+            mode: 'markers',
+            type: 'scatter3d',
+            marker: { size: edPointSize, color: '#be123c' },
+            name: seriesNames.ed
+        }], layout3D, { responsive: true, displayModeBar: false });
+    } else {
+        // 2D fallback using heatmap + 2D scatter
+        const agSurface2D = { ...surface2DTrace, z: cachedSurfaceZ, colorscale: 'Viridis' };
+        const psoSurface2D = { ...surface2DTrace, z: cachedSurfaceZ, colorscale: 'Viridis' };
+        const edSurface2D = { ...surface2DTrace, z: cachedSurfaceZ, colorscale: 'Viridis' };
+
+        Plotly.newPlot('agPlot', [agSurface2D, { x: [], y: [], mode: 'markers', type: 'scatter', marker: { size: agPointSize, color: '#0f766e' }, name: seriesNames.ag }], layout2D, { responsive: true, displayModeBar: false });
+        Plotly.newPlot('psoPlot', [psoSurface2D, { x: [], y: [], mode: 'markers', type: 'scatter', marker: { size: psoPointSize, color: '#d97706' }, name: seriesNames.pso }], layout2D, { responsive: true, displayModeBar: false });
+        Plotly.newPlot('edPlot', [edSurface2D, { x: [], y: [], mode: 'markers', type: 'scatter', marker: { size: edPointSize, color: '#be123c' }, name: seriesNames.ed }], layout2D, { responsive: true, displayModeBar: false });
+    }
+
+    // Convergence Plot (always 2D)
     Plotly.newPlot('convergencePlot', [
         { x: [], y: [], mode: 'lines', name: seriesNames.ag, line: { color: '#0f766e' } },
         { x: [], y: [], mode: 'lines', name: seriesNames.pso, line: { color: '#d97706' } },
         { x: [], y: [], mode: 'lines', name: seriesNames.ed, line: { color: '#be123c' } }
     ], layoutConvergence, { responsive: true, displayModeBar: false });
+
     updatePlotLanguage();
-}
+} 
 
 // --- Local Simulation (replaces WebSocket) ---
 
@@ -779,13 +838,24 @@ function updateDashboard(data) {
         const agY = data.ag.population.map(p => p[1]);
         const agZ = data.ag.population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))));
 
-        const agData = [{ ...surfaceTrace, z: cachedSurfaceZ, opacity: getNumberValue('ag_surface_opacity', 0.45) }, {
-            x: agX, y: agY, z: agZ,
-            mode: 'markers',
-            type: 'scatter3d',
-            marker: { size: getNumberValue('ag_point_size', 5), color: '#0f766e' },
-            name: getSeriesNames().ag
-        }];
+        let agData;
+        if (WEBGL_AVAILABLE) {
+            agData = [{ ...surfaceTrace, z: cachedSurfaceZ, opacity: getNumberValue('ag_surface_opacity', 0.45) }, {
+                x: agX, y: agY, z: agZ,
+                mode: 'markers',
+                type: 'scatter3d',
+                marker: { size: getNumberValue('ag_point_size', 5), color: '#0f766e' },
+                name: getSeriesNames().ag
+            }];
+        } else {
+            agData = [{ ...surface2DTrace, z: cachedSurfaceZ }, {
+                x: agX, y: agY,
+                mode: 'markers',
+                type: 'scatter',
+                marker: { size: getNumberValue('ag_point_size', 5), color: '#0f766e' },
+                name: getSeriesNames().ag
+            }];
+        }
 
         Plotly.react('agPlot', agData, document.getElementById('agPlot').layout);
     }
@@ -797,13 +867,24 @@ function updateDashboard(data) {
         const psoY = data.pso.population.map(p => p[1]);
         const psoZ = data.pso.population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))));
 
-        const psoData = [{ ...surfaceTrace, z: cachedSurfaceZ, opacity: getNumberValue('pso_surface_opacity', 0.45) }, {
-            x: psoX, y: psoY, z: psoZ,
-            mode: 'markers',
-            type: 'scatter3d',
-            marker: { size: getNumberValue('pso_point_size', 5), color: '#d97706' },
-            name: getSeriesNames().pso
-        }];
+        let psoData;
+        if (WEBGL_AVAILABLE) {
+            psoData = [{ ...surfaceTrace, z: cachedSurfaceZ, opacity: getNumberValue('pso_surface_opacity', 0.45) }, {
+                x: psoX, y: psoY, z: psoZ,
+                mode: 'markers',
+                type: 'scatter3d',
+                marker: { size: getNumberValue('pso_point_size', 5), color: '#d97706' },
+                name: getSeriesNames().pso
+            }];
+        } else {
+            psoData = [{ ...surface2DTrace, z: cachedSurfaceZ }, {
+                x: psoX, y: psoY,
+                mode: 'markers',
+                type: 'scatter',
+                marker: { size: getNumberValue('pso_point_size', 5), color: '#d97706' },
+                name: getSeriesNames().pso
+            }];
+        }
 
         Plotly.react('psoPlot', psoData, document.getElementById('psoPlot').layout);
     }
@@ -815,13 +896,24 @@ function updateDashboard(data) {
         const edY = data.ed.population.map(p => p[1]);
         const edZ = data.ed.population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))));
 
-        const edData = [{ ...surfaceTrace, z: cachedSurfaceZ, opacity: getNumberValue('ed_surface_opacity', 0.45) }, {
-            x: edX, y: edY, z: edZ,
-            mode: 'markers',
-            type: 'scatter3d',
-            marker: { size: getNumberValue('ed_point_size', 5), color: '#be123c' },
-            name: getSeriesNames().ed
-        }];
+        let edData;
+        if (WEBGL_AVAILABLE) {
+            edData = [{ ...surfaceTrace, z: cachedSurfaceZ, opacity: getNumberValue('ed_surface_opacity', 0.45) }, {
+                x: edX, y: edY, z: edZ,
+                mode: 'markers',
+                type: 'scatter3d',
+                marker: { size: getNumberValue('ed_point_size', 5), color: '#be123c' },
+                name: getSeriesNames().ed
+            }];
+        } else {
+            edData = [{ ...surface2DTrace, z: cachedSurfaceZ }, {
+                x: edX, y: edY,
+                mode: 'markers',
+                type: 'scatter',
+                marker: { size: getNumberValue('ed_point_size', 5), color: '#be123c' },
+                name: getSeriesNames().ed
+            }];
+        }
 
         Plotly.react('edPlot', edData, document.getElementById('edPlot').layout);
     }
@@ -901,6 +993,8 @@ function resetSimulation() {
         functionErrorEl.textContent = '';
         functionErrorEl.classList.remove('success-message');
     }
+    // Re-show WebGL fallback notice if applicable
+    showWebGLNotice();
 
     if (!compiledExpression) {
         compileExpression();
@@ -1497,11 +1591,19 @@ function benchmarkAnimatedStep() {
         const xs = population.map(p => p[0]);
         const ys = population.map(p => p[1]);
         const zs = population.map(p => applyObjectiveValue(safeValue(evaluateExpressionVector(p))));
-        const data = [
-            { ...surfaceTrace, z: cachedSurfaceZ, opacity },
-            { x: xs, y: ys, z: zs, mode: 'markers', type: 'scatter3d',
-              marker: { size: pointSize, color }, name: seriesName }
-        ];
+        let data;
+        if (WEBGL_AVAILABLE) {
+            data = [
+                { ...surfaceTrace, z: cachedSurfaceZ, opacity },
+                { x: xs, y: ys, z: zs, mode: 'markers', type: 'scatter3d',
+                  marker: { size: pointSize, color }, name: seriesName }
+            ];
+        } else {
+            data = [
+                { ...surface2DTrace, z: cachedSurfaceZ },
+                { x: xs, y: ys, mode: 'markers', type: 'scatter', marker: { size: pointSize, color }, name: seriesName }
+            ];
+        }
         Plotly.react(plotId, data, document.getElementById(plotId).layout);
     };
 

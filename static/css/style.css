@@ -760,6 +760,11 @@ h2 {
     font-weight: 600;
 }
 
+.field-error.warning-message {
+    color: var(--accent-amber);
+    font-weight: 600;
+}
+
 /* Custom Range Input */
 input[type="range"] {
     -webkit-appearance: none;
