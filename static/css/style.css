@@ -126,7 +126,7 @@ body::after {
 
 .dashboard-container {
     width: 100%;
-    max-width: 1280px;
+    max-width: 100%;
     padding: 2.5rem clamp(1.5rem, 3vw, 3rem) 3rem;
     display: flex;
     flex-direction: column;
@@ -390,7 +390,7 @@ h2 {
 
 .canvas-container {
     width: 100%;
-    height: clamp(260px, 38vw, 420px);
+    height: clamp(300px, 30vw, 500px);
     background: radial-gradient(circle at center, var(--card-bg) 0%, var(--bg-soft) 100%);
     border-radius: 18px;
     overflow: hidden;
@@ -876,7 +876,7 @@ main[data-focus="ed"] .algorithm-card[data-algo="ed"] {
 }
 
 .chart-card {
-    height: clamp(280px, 32vw, 400px);
+    height: clamp(320px, 28vw, 480px);
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
