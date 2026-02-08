@@ -30,7 +30,7 @@ const REPORT_CONFIG = {
         email: 'joao.silva.neto@itec.ufpa.br',
         creator: 'Evolutionary Optimization Viz'
     },
-    projectUrl: 'https://joaosnet.github.io/evolutionary-optimization-viz/',
+    projectUrl: 'https://joaosnet.github.io/evolutionary-optimization-viz-ag-pso/',
     templateUrl: 'https://github.com/uefs/sbc-template-latex'
 };
 
@@ -70,9 +70,7 @@ const REPORT_AI_PROMPTS = [
     'Adicionar modo foco por algoritmo — clicar no badge expande o card',
     'Dashboard deve ocupar largura total da tela',
     'Benchmark deve respeitar configurações de convergência',
-    'Deve poder selecionar 1 só algoritmo, 2 dois, ou 3 para comparar e ou gerar relatório',
-    'Quero tornar mais fácil fazer alterações no relatório PDF',
-    'No relatório deve usar o benchmark além disso, para o ED utilize todo o histórico da conversa atual e coloque no relatório'
+    'Deve poder selecionar 1 só algoritmo, 2 dois, ou 3 para comparar'
 ];
 
 // ─── Histórico de Desenvolvimento do ED ─────────────────────────────────────
@@ -463,11 +461,15 @@ const REPORT_SECTIONS = [
             const doc = layout.doc;
             const meta = REPORT_CONFIG.metadata;
             const shortTitle = enabledShortTitle(data.enabledKeys);
+            const isSingle = data.enabledKeys.length === 1;
 
             // Título 14pt bold centralizado
             doc.setFont(layout.cfg.font, 'bold');
             doc.setFontSize(14);
-            doc.text(`Comparação entre ${shortTitle}`, layout.pageWidth / 2, layout.cursorY, { align: 'center' });
+            const titleLine1 = isSingle
+                ? `Avaliação do ${shortTitle}`
+                : `Comparação entre ${shortTitle}`;
+            doc.text(titleLine1, layout.pageWidth / 2, layout.cursorY, { align: 'center' });
             layout.cursorY += 6;
             doc.text('na Otimização de Funções Multimodais', layout.pageWidth / 2, layout.cursorY, { align: 'center' });
             layout.cursorY += 12;
@@ -508,8 +510,12 @@ const REPORT_SECTIONS = [
             const maxIter = Math.max(...keys.map(k => data.scores[k]?.iteration || 0), 0);
             const winner = determineWinner(data);
 
+            const isSingle = keys.length === 1;
             const benchmarkNote = data.benchmark ? ` Adicionalmente, um benchmark estatístico com ${data.benchmark.totalRuns} execuções independentes foi realizado para validar a robustez dos resultados.` : '';
-            const absText = `Este trabalho apresenta uma análise comparativa entre ${enabledFullPT(keys)} aplicados à otimização de funções multimodais. A simulação foi executada com ${maxIter} iterações, utilizando uma população de ${data.params.pop_size} indivíduos/partículas.${benchmarkNote} Os resultados demonstram que ${winner.pt}. O projeto foi desenvolvido com assistência de Inteligência Artificial (IA).`;
+            const introText = isSingle
+                ? `Este trabalho apresenta uma avaliação do ${enabledFullPT(keys)} aplicado à otimização de funções multimodais.`
+                : `Este trabalho apresenta uma análise comparativa entre ${enabledFullPT(keys)} aplicados à otimização de funções multimodais.`;
+            const absText = `${introText} A simulação foi executada com ${maxIter} iterações, utilizando uma população de ${data.params.pop_size} indivíduos/partículas.${benchmarkNote} Os resultados demonstram que ${winner.pt}. O projeto foi desenvolvido com assistência de Inteligência Artificial (IA).`;
 
             doc.setFont(layout.cfg.font, 'bold');
             doc.setFontSize(12);
@@ -544,8 +550,12 @@ const REPORT_SECTIONS = [
             const maxIter = Math.max(...keys.map(k => data.scores[k]?.iteration || 0), 0);
             const winner = determineWinner(data);
 
+            const isSingle = keys.length === 1;
             const benchmarkNoteEN = data.benchmark ? ` Additionally, a statistical benchmark with ${data.benchmark.totalRuns} independent runs was performed to validate result robustness.` : '';
-            const absText = `This paper presents a comparative analysis between ${enabledFullEN(keys)} applied to multimodal function optimization. The simulation ran for ${maxIter} iterations with a population of ${data.params.pop_size} individuals/particles.${benchmarkNoteEN} Results show that ${winner.en}. This project was developed with AI assistance.`;
+            const introTextEN = isSingle
+                ? `This paper presents an evaluation of ${enabledFullEN(keys)} applied to multimodal function optimization.`
+                : `This paper presents a comparative analysis between ${enabledFullEN(keys)} applied to multimodal function optimization.`;
+            const absText = `${introTextEN} The simulation ran for ${maxIter} iterations with a population of ${data.params.pop_size} individuals/particles.${benchmarkNoteEN} Results show that ${winner.en}. This project was developed with AI assistance.`;
 
             doc.setFont(layout.cfg.font, 'bold');
             doc.setFontSize(12);
@@ -576,7 +586,10 @@ const REPORT_SECTIONS = [
             const keys = data.enabledKeys;
 
             layout.addSectionHeading('1. Introdução');
-            layout.addText(`A otimização de funções multimodais representa um desafio significativo. Este relatório compara ${keys.length === 1 ? 'o algoritmo' : keys.length + ' algoritmos metaheurísticos'}: ${enabledShortPT(keys)}.`);
+            const introSentence = keys.length === 1
+                ? `A otimização de funções multimodais representa um desafio significativo. Este relatório avalia o desempenho do ${enabledShortPT(keys)}.`
+                : `A otimização de funções multimodais representa um desafio significativo. Este relatório compara ${keys.length} algoritmos metaheurísticos: ${enabledShortPT(keys)}.`;
+            layout.addText(introSentence);
 
             layout.addSubsectionHeading('1.1 Função Objetivo');
             layout.addText(`Função: f(x) = ${data.params.function_expr}`);
@@ -747,11 +760,17 @@ const REPORT_SECTIONS = [
 
             const keys = b.enabledKeys;
 
+            const isSingle = keys.length === 1;
+
             layout.addSectionHeading('5. Benchmark Estatístico');
-            layout.addText(`Para validação estatística, foi executado um benchmark com ${b.totalRuns} execuções independentes, cada uma com ${b.itersPerRun} iterações. A cada execução, os algoritmos são reinicializados com populações aleatórias distintas, garantindo independência entre amostras.`);
+            const benchIntro = isSingle
+                ? `Para validação estatística, foi executado um benchmark com ${b.totalRuns} execuções independentes do ${ALG_NAMES[keys[0]].shortPT}, cada uma com ${b.itersPerRun} iterações. A cada execução, o algoritmo é reinicializado com população aleatória distinta, garantindo independência entre amostras.`
+                : `Para validação estatística, foi executado um benchmark com ${b.totalRuns} execuções independentes, cada uma com ${b.itersPerRun} iterações. A cada execução, os algoritmos são reinicializados com populações aleatórias distintas, garantindo independência entre amostras.`;
+            layout.addText(benchIntro);
 
             // 5.1 Estatísticas
-            layout.addSubsectionHeading('5.1 Estatísticas Descritivas');
+            let subSec = 1;
+            layout.addSubsectionHeading(`5.${subSec} Estatísticas Descritivas`);
             layout.addTable(
                 ['Métrica', ...keys.map(k => ALG_NAMES[k].shortPT)],
                 [
@@ -763,24 +782,28 @@ const REPORT_SECTIONS = [
                 ]
             );
 
-            // 5.2 Vitórias
-            layout.addSubsectionHeading('5.2 Contagem de Vitórias');
-            const winsRows = keys.map(k => [ALG_NAMES[k].shortPT, b.wins[k] || 0, `${Math.round(((b.wins[k] || 0) / b.totalRuns) * 100)}%`]);
-            if (b.wins.tie > 0) {
-                winsRows.push(['Empate', b.wins.tie, `${Math.round((b.wins.tie / b.totalRuns) * 100)}%`]);
-            }
-            layout.addTable(['Algoritmo', 'Vitórias', '%'], winsRows);
+            // Vitórias e Vencedor — apenas se há mais de 1 algoritmo
+            if (!isSingle) {
+                subSec++;
+                layout.addSubsectionHeading(`5.${subSec} Contagem de Vitórias`);
+                const winsRows = keys.map(k => [ALG_NAMES[k].shortPT, b.wins[k] || 0, `${Math.round(((b.wins[k] || 0) / b.totalRuns) * 100)}%`]);
+                if (b.wins.tie > 0) {
+                    winsRows.push(['Empate', b.wins.tie, `${Math.round((b.wins.tie / b.totalRuns) * 100)}%`]);
+                }
+                layout.addTable(['Algoritmo', 'Vitórias', '%'], winsRows);
 
-            // 5.3 Vencedor do Benchmark
-            layout.addSubsectionHeading('5.3 Resultado');
-            if (b.isTie) {
-                layout.addText('O benchmark resultou em empate técnico entre os algoritmos.');
-            } else {
-                layout.addText(`O vencedor do benchmark foi o ${ALG_NAMES[b.winner.key].shortPT} com ${b.winner.wins} vitórias em ${b.totalRuns} execuções (${Math.round((b.winner.wins / b.totalRuns) * 100)}%).`);
+                subSec++;
+                layout.addSubsectionHeading(`5.${subSec} Resultado`);
+                if (b.isTie) {
+                    layout.addText('O benchmark resultou em empate técnico entre os algoritmos.');
+                } else {
+                    layout.addText(`O vencedor do benchmark foi o ${ALG_NAMES[b.winner.key].shortPT} com ${b.winner.wins} vitórias em ${b.totalRuns} execuções (${Math.round((b.winner.wins / b.totalRuns) * 100)}%).`);
+                }
             }
 
             // Análise de robustez
-            layout.addSubsectionHeading('5.4 Análise de Robustez');
+            subSec++;
+            layout.addSubsectionHeading(`5.${subSec} Análise de Robustez`);
             keys.forEach(k => {
                 const s = b.stats[k];
                 const cv = s.mean !== 0 ? ((s.std / Math.abs(s.mean)) * 100).toFixed(1) : 'N/A';
@@ -821,6 +844,7 @@ const REPORT_SECTIONS = [
             REPORT_AI_MODELS.forEach(m => layout.addBullet(m));
             layout.addText('Prompts utilizados:');
             REPORT_AI_PROMPTS.forEach(p => layout.addBullet(p));
+
             layout.addText(`Template SBC (2025-2026): ${REPORT_CONFIG.templateUrl}`);
         }
     },
@@ -861,13 +885,19 @@ const REPORT_SECTIONS = [
 
             // Benchmark discussion
             if (data.benchmark) {
+                const bKeys = data.benchmark.enabledKeys;
+                const isSingleBench = bKeys.length === 1;
                 layout.addSubsectionHeading(`${secNum}.${sub + 1} Análise do Benchmark`);
                 const b = data.benchmark;
-                layout.addText(`O benchmark com ${b.totalRuns} execuções independentes permite uma avaliação estatisticamente mais robusta do que uma única simulação. A variabilidade observada (desvio padrão e coeficiente de variação) revela a sensibilidade de cada algoritmo às condições iniciais aleatórias.`);
-                if (!b.isTie) {
-                    layout.addText(`O ${ALG_NAMES[b.winner.key].shortPT} apresentou superioridade estatística com ${b.winner.wins} vitórias (${Math.round((b.winner.wins / b.totalRuns) * 100)}%), sugerindo que é a melhor escolha para este tipo de função objetivo e configuração de parâmetros.`);
+                if (isSingleBench) {
+                    layout.addText(`O benchmark com ${b.totalRuns} execuções independentes permite uma avaliação estatisticamente robusta da consistência do ${ALG_NAMES[bKeys[0]].shortPT}. A variabilidade observada (desvio padrão e coeficiente de variação) revela a sensibilidade do algoritmo às condições iniciais aleatórias.`);
                 } else {
-                    layout.addText('O empate técnico sugere que os algoritmos possuem capacidades similares para esta configuração, sendo a escolha entre eles dependente de critérios adicionais como velocidade de convergência ou estabilidade.');
+                    layout.addText(`O benchmark com ${b.totalRuns} execuções independentes permite uma avaliação estatisticamente mais robusta do que uma única simulação. A variabilidade observada (desvio padrão e coeficiente de variação) revela a sensibilidade de cada algoritmo às condições iniciais aleatórias.`);
+                    if (!b.isTie) {
+                        layout.addText(`O ${ALG_NAMES[b.winner.key].shortPT} apresentou superioridade estatística com ${b.winner.wins} vitórias (${Math.round((b.winner.wins / b.totalRuns) * 100)}%), sugerindo que é a melhor escolha para este tipo de função objetivo e configuração de parâmetros.`);
+                    } else {
+                        layout.addText('O empate técnico sugere que os algoritmos possuem capacidades similares para esta configuração, sendo a escolha entre eles dependente de critérios adicionais como velocidade de convergência ou estabilidade.');
+                    }
                 }
             }
         }
@@ -909,6 +939,8 @@ const REPORT_SECTIONS = [
 
             if (keys.length > 1) {
                 layout.addText('A análise comparativa dos algoritmos metaheurísticos implementados permite as seguintes conclusões:');
+            } else {
+                layout.addText(`A avaliação do ${ALG_NAMES[keys[0]].shortPT} permite as seguintes conclusões:`);
             }
 
             if (data.enabled.ag) layout.addBullet('O AG demonstra robustez a longo prazo e boa exploração do espaço de busca mediante operadores genéticos.');
@@ -917,7 +949,9 @@ const REPORT_SECTIONS = [
 
             if (data.benchmark) {
                 const b = data.benchmark;
-                if (!b.isTie) {
+                if (keys.length === 1) {
+                    layout.addBullet(`O benchmark estatístico com ${b.totalRuns} execuções confirmou a consistência do ${ALG_NAMES[keys[0]].shortPT}, com desvio padrão de ${b.stats[keys[0]].std.toFixed(6)}.`);
+                } else if (!b.isTie) {
                     layout.addBullet(`O benchmark estatístico com ${b.totalRuns} execuções confirmou a superioridade do ${ALG_NAMES[b.winner.key].shortPT} para a configuração testada.`);
                 } else {
                     layout.addBullet(`O benchmark com ${b.totalRuns} execuções resultou em empate técnico, indicando desempenho comparável entre os algoritmos testados.`);
@@ -997,8 +1031,11 @@ async function generatePdfReport() {
 
         // 3. Cria documento
         const doc = new jsPDF();
+        const pdfTitle = data.enabledKeys.length === 1
+            ? `Avaliação do ${enabledShortPT(data.enabledKeys)} - Relatório SBC`
+            : `Comparação entre ${enabledShortPT(data.enabledKeys)} - Relatório SBC`;
         doc.setProperties({
-            title: `Comparação entre ${enabledShortPT(data.enabledKeys)} - Relatório SBC`,
+            title: pdfTitle,
             subject: 'Relatório Técnico - Template SBC',
             author: REPORT_CONFIG.metadata.author,
             creator: REPORT_CONFIG.metadata.creator
