@@ -376,7 +376,7 @@ function collectReportData() {
 //  Helper — captura de imagens (Plotly)
 // =============================================================================
 
-async function captureReportImages(enabledKeys) {
+async function captureReportImages(enabledKeys, functionExpr) {
     const imgs = {};
     const plotIds = { ag: 'agPlot', pso: 'psoPlot', ed: 'edPlot' };
 
@@ -388,7 +388,103 @@ async function captureReportImages(enabledKeys) {
     const convEl = document.getElementById('convergencePlot');
     if (convEl) imgs.convergence = await Plotly.toImage(convEl, { format: 'png', width: 600, height: 350 });
 
+    // Render function expression as math image (LaTeX via KaTeX + SVG -> PNG)
+    if (functionExpr) {
+        try {
+            imgs.function = await renderLatexFunctionImage(functionExpr);
+        } catch (e) {
+            console.warn('Failed to render function LaTeX image:', e);
+        }
+    }
+
     return imgs;
+}
+
+// ─── Math Rendering Helpers (KaTeX) ───────────────────────────────────────
+
+async function ensureKaTeXLoaded() {
+    if (window.katex) return;
+    // If already loading, wait for script to be present
+    if (document.getElementById('katex-js')) {
+        return new Promise((resolve, reject) => {
+            const check = setInterval(() => { if (window.katex) { clearInterval(check); resolve(); } }, 50);
+            setTimeout(() => { clearInterval(check); if (!window.katex) reject(new Error('KaTeX load timeout')); }, 5000);
+        });
+    }
+
+    return new Promise((resolve, reject) => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css';
+        document.head.appendChild(link);
+
+        const script = document.createElement('script');
+        script.id = 'katex-js';
+        script.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load KaTeX'));
+        document.head.appendChild(script);
+    });
+}
+
+function expressionToLatex(expr) {
+    if (!expr) return '';
+    let s = String(expr);
+    // Convert x1, x2 -> x_{1}
+    s = s.replace(/\b(x)(\d+)/g, (_m, _x, num) => `x_{${num}}`);
+    // Replace * with \cdot for better appearance
+    s = s.replace(/\*/g, ' \\cdot ');
+    // Wrap in function form
+    return `f(\\mathbf{x}) = ${s}`;
+}
+
+async function renderLatexToPng(latex, { fontSize = 18, scale = 2 } = {}) {
+    await ensureKaTeXLoaded();
+    const html = katex.renderToString(latex, { throwOnError: false, displayMode: true });
+
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '-9999px';
+    container.style.padding = '4px';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
+    const rect = container.getBoundingClientRect();
+    const width = Math.max(100, Math.ceil(rect.width));
+    const height = Math.max(24, Math.ceil(rect.height));
+
+    const svg = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"${width}\" height=\"${height}\"><foreignObject width=\"100%\" height=\"100%\"><div xmlns=\"http://www.w3.org/1999/xhtml\" style=\"font-family: 'Times New Roman'; font-size: ${fontSize}px; color: #000;\">${html}</div></foreignObject></svg>`;
+
+    document.body.removeChild(container);
+
+    const img = new Image();
+    const svg64 = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+
+    await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = svg64;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png');
+}
+
+async function renderLatexFunctionImage(expr) {
+    try {
+        const latex = expressionToLatex(expr);
+        return await renderLatexToPng(latex, { fontSize: 16, scale: 3 });
+    } catch (e) {
+        console.warn('renderLatexFunctionImage error', e);
+        return null;
+    }
 }
 
 // =============================================================================
@@ -592,7 +688,12 @@ const REPORT_SECTIONS = [
             layout.addText(introSentence);
 
             layout.addSubsectionHeading('1.1 Função Objetivo');
-            layout.addText(`Função: f(x) = ${data.params.function_expr}`);
+            // If we have a rendered math image, include it; otherwise fall back to plain text
+            if (images && images.function) {
+                layout.addImage(images.function, `Função Objetivo: ${data.params.function_expr}`, 18);
+            } else {
+                layout.addText(`Função: f(x) = ${data.params.function_expr}`);
+            }
             layout.addText(`Domínio: [-5.12, 5.12] em ${data.params.dimensions} dimensões.`);
 
             layout.addSubsectionHeading('1.2 Modo de Otimização');
@@ -1027,7 +1128,7 @@ async function generatePdfReport() {
         const data = collectReportData();
 
         // 2. Captura imagens
-        const images = await captureReportImages(data.enabledKeys);
+        const images = await captureReportImages(data.enabledKeys, data.params.function_expr);
 
         // 3. Cria documento
         const doc = new jsPDF();
