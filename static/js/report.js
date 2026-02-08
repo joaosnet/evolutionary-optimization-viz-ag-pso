@@ -63,7 +63,59 @@ const REPORT_AI_PROMPTS = [
     'A funcao padrao que deve vir no teclado é a da imagem',
     'não está dando para resetar',
     'Ainda não é possivel resetar ao estado inicial, de poder voltar a qualquer iteracao',
-    'syntax error in part "*(x1^2+x2^2))^2)" (char 44'
+    'syntax error in part "*(x1^2+x2^2))^2)" (char 44',
+    'Implementar Evolução Diferencial (ED) como terceiro algoritmo de otimização',
+    'Remover backend Python e tornar client-only para GitHub Pages',
+    'Adicionar benchmark multi-run com animação em tempo real e exibição de vencedor',
+    'Adicionar modo foco por algoritmo — clicar no badge expande o card',
+    'Dashboard deve ocupar largura total da tela',
+    'Benchmark deve respeitar configurações de convergência',
+    'Deve poder selecionar 1 só algoritmo, 2 dois, ou 3 para comparar e ou gerar relatório',
+    'Quero tornar mais fácil fazer alterações no relatório PDF',
+    'No relatório deve usar o benchmark além disso, para o ED utilize todo o histórico da conversa atual e coloque no relatório'
+];
+
+// ─── Histórico de Desenvolvimento do ED ─────────────────────────────────────
+// Cronologia completa da implementação da Evolução Diferencial neste projeto,
+// baseada no histórico de conversa com IA.
+
+const ED_DEVELOPMENT_HISTORY = [
+    {
+        phase: 'Concepção e Implementação Inicial',
+        description: 'A Evolução Diferencial (ED) foi adicionada como terceiro algoritmo metaheurístico ao dashboard, que originalmente continha apenas AG e PSO. A implementação seguiu a estratégia clássica DE/rand/1/bin proposta por Storn e Price (1997).'
+    },
+    {
+        phase: 'Arquitetura de Classes',
+        description: 'A classe DifferentialEvolution herda de OptimizationAlgorithm (classe base compartilhada com AG e PSO), garantindo interface consistente. Implementa dois parâmetros de controle: F (fator de escala, padrão 0.8) e CR (taxa de crossover, padrão 0.9).'
+    },
+    {
+        phase: 'Operadores Implementados',
+        description: 'Mutação: vetor doador gerado como x_a + F*(x_b - x_c), onde a, b, c são índices aleatórios distintos. Crossover binomial: cada dimensão do vetor trial é herdada do doador com probabilidade CR, com garantia de pelo menos uma dimensão do doador (jRand). Seleção greedy: o trial substitui o indivíduo corrente se for melhor ou igual.'
+    },
+    {
+        phase: 'Testes Automatizados',
+        description: 'Foram criados 10 testes unitários específicos para ED com Jest: inicialização correta, arrays de fitness, incremento de iteração, melhoria do bestScore em minimização, limites da população, registro de histórico, snapshot com campos específicos (fitness, objectiveFitness), restauração de estado, seleção de índices distintos, e convergência na função esfera.'
+    },
+    {
+        phase: 'Integração ao Dashboard',
+        description: 'O card do ED foi adicionado ao grid de 3 colunas com cor temática rosa (#be123c). Inclui controles interativos para F e CR, plot 3D independente, e integração completa com o gráfico de convergência, benchmark multi-run e sistema de navegação de iterações.'
+    },
+    {
+        phase: 'Remoção do Backend Python',
+        description: 'O projeto foi convertido de FastAPI + Python para client-only JavaScript, permitindo deploy estático no GitHub Pages. A lógica do ED (e dos demais algoritmos) foi toda portada para JS puro, mantendo a mesma API de classes.'
+    },
+    {
+        phase: 'Benchmark Multi-Run',
+        description: 'O sistema de benchmark com animação em tempo real foi implementado, permitindo N execuções consecutivas de todos os algoritmos habilitados. O ED participa das rodadas com seu próprio registro de estatísticas (média, desvio padrão, melhor, pior, mediana, vitórias).'
+    },
+    {
+        phase: 'Seleção Dinâmica de Algoritmos',
+        description: 'Toggle on/off foi adicionado a cada card de algoritmo. O ED pode ser habilitado/desabilitado independentemente, com o grid se ajustando dinamicamente (1, 2 ou 3 colunas). Toda a simulação, benchmark e relatório PDF respeitam a seleção.'
+    },
+    {
+        phase: 'Refatoração do Relatório PDF',
+        description: 'O sistema de geração de relatório foi modularizado em seções independentes (report.js), facilitando manutenção. O ED aparece dinamicamente em todas as seções conforme habilitado: configuração, resultados, convergência, discussão e conclusões.'
+    }
 ];
 
 // ─── Referências Bibliográficas ─────────────────────────────────────────────
@@ -267,6 +319,30 @@ function collectReportData() {
     const enabled = getEnabledAlgorithms();
     const enabledKeys = getEnabledKeys();
 
+    // Collect benchmark data if available
+    let benchmark = null;
+    if (typeof benchmarkResults !== 'undefined' && benchmarkResults) {
+        const bKeys = enabledKeys.filter(k => benchmarkResults[k] && benchmarkResults[k].length > 0);
+        if (bKeys.length > 0) {
+            const stats = {};
+            bKeys.forEach(k => { stats[k] = computeStats(benchmarkResults[k]); });
+
+            const wins = (typeof benchmarkWins !== 'undefined' && benchmarkWins) ? benchmarkWins : { ag: 0, pso: 0, ed: 0, tie: 0 };
+            const totalRuns = (typeof benchmarkRunIndex !== 'undefined') ? benchmarkRunIndex : 0;
+            const itersPerRun = (typeof benchmarkItersPerRun !== 'undefined') ? benchmarkItersPerRun : 0;
+
+            // Determine benchmark winner
+            const mode = getOptimizationMode();
+            const sorted = bKeys.map(k => ({ key: k, wins: wins[k] || 0, mean: stats[k].mean }))
+                .sort((a, b) => {
+                    if (b.wins !== a.wins) return b.wins - a.wins;
+                    return mode === 'max' ? b.mean - a.mean : a.mean - b.mean;
+                });
+
+            benchmark = { stats, wins, totalRuns, itersPerRun, enabledKeys: bKeys, winner: sorted[0], isTie: sorted.length >= 2 && sorted[0].wins === sorted[1].wins };
+        }
+    }
+
     return {
         enabled,
         enabledKeys,
@@ -293,7 +369,8 @@ function collectReportData() {
             ag:  historyCache.ag,
             pso: historyCache.pso,
             ed:  historyCache.ed
-        }
+        },
+        benchmark
     };
 }
 
@@ -431,7 +508,8 @@ const REPORT_SECTIONS = [
             const maxIter = Math.max(...keys.map(k => data.scores[k]?.iteration || 0), 0);
             const winner = determineWinner(data);
 
-            const absText = `Este trabalho apresenta uma análise comparativa entre ${enabledFullPT(keys)} aplicados à otimização de funções multimodais. A simulação foi executada com ${maxIter} iterações, utilizando uma população de ${data.params.pop_size} indivíduos/partículas. Os resultados demonstram que ${winner.pt}. O projeto foi desenvolvido com assistência de Inteligência Artificial (IA).`;
+            const benchmarkNote = data.benchmark ? ` Adicionalmente, um benchmark estatístico com ${data.benchmark.totalRuns} execuções independentes foi realizado para validar a robustez dos resultados.` : '';
+            const absText = `Este trabalho apresenta uma análise comparativa entre ${enabledFullPT(keys)} aplicados à otimização de funções multimodais. A simulação foi executada com ${maxIter} iterações, utilizando uma população de ${data.params.pop_size} indivíduos/partículas.${benchmarkNote} Os resultados demonstram que ${winner.pt}. O projeto foi desenvolvido com assistência de Inteligência Artificial (IA).`;
 
             doc.setFont(layout.cfg.font, 'bold');
             doc.setFontSize(12);
@@ -466,7 +544,8 @@ const REPORT_SECTIONS = [
             const maxIter = Math.max(...keys.map(k => data.scores[k]?.iteration || 0), 0);
             const winner = determineWinner(data);
 
-            const absText = `This paper presents a comparative analysis between ${enabledFullEN(keys)} applied to multimodal function optimization. The simulation ran for ${maxIter} iterations with a population of ${data.params.pop_size} individuals/particles. Results show that ${winner.en}. This project was developed with AI assistance.`;
+            const benchmarkNoteEN = data.benchmark ? ` Additionally, a statistical benchmark with ${data.benchmark.totalRuns} independent runs was performed to validate result robustness.` : '';
+            const absText = `This paper presents a comparative analysis between ${enabledFullEN(keys)} applied to multimodal function optimization. The simulation ran for ${maxIter} iterations with a population of ${data.params.pop_size} individuals/particles.${benchmarkNoteEN} Results show that ${winner.en}. This project was developed with AI assistance.`;
 
             doc.setFont(layout.cfg.font, 'bold');
             doc.setFontSize(12);
@@ -517,11 +596,26 @@ const REPORT_SECTIONS = [
             const { layout, data } = ctx;
 
             layout.addSectionHeading('2. Fundamentação Teórica');
-            const parts = [];
-            if (data.enabled.ag)  parts.push('O Algoritmo Genético (AG) utiliza seleção por torneio, crossover BLX-alpha e mutação gaussiana.');
-            if (data.enabled.pso) parts.push('O PSO utiliza a formulação canônica com inércia.');
-            if (data.enabled.ed)  parts.push('A Evolução Diferencial (ED) utiliza a estratégia DE/rand/1/bin com crossover binomial.');
-            layout.addText(parts.join(' '));
+            if (data.enabled.ag) {
+                layout.addSubsectionHeading('2.1 Algoritmo Genético (AG)');
+                layout.addText('O Algoritmo Genético (AG) é inspirado na evolução biológica. Utiliza seleção por torneio para escolher indivíduos mais aptos, crossover BLX-alpha para combinar material genético de dois pais, e mutação gaussiana para introduzir diversidade. A cada geração, a população evolui em direção a soluções melhores.');
+            }
+            if (data.enabled.pso) {
+                const psoSub = data.enabled.ag ? '2.2' : '2.1';
+                layout.addSubsectionHeading(`${psoSub} Otimização por Enxame de Partículas (PSO)`);
+                layout.addText('O PSO simula o comportamento social de bandos de pássaros ou cardumes de peixes. Cada partícula ajusta sua velocidade com base em sua melhor posição pessoal (pbest) e na melhor posição global do enxame (gbest), utilizando a formulação canônica com peso de inércia w para balancear exploração e explotação.');
+            }
+            if (data.enabled.ed) {
+                let edSub = '2.1';
+                if (data.enabled.ag && data.enabled.pso) edSub = '2.3';
+                else if (data.enabled.ag || data.enabled.pso) edSub = '2.2';
+                layout.addSubsectionHeading(`${edSub} Evolução Diferencial (ED)`);
+                layout.addText('A Evolução Diferencial (ED), proposta por Storn e Price (1997), é um algoritmo de otimização estocástica para espaços contínuos. A implementação utiliza a estratégia DE/rand/1/bin, que opera em três fases:');
+                layout.addBullet('Mutação: gera um vetor doador v = x_a + F·(x_b - x_c), onde a, b, c são índices aleatórios distintos e F é o fator de escala (differential weight).');
+                layout.addBullet('Crossover binomial: cada dimensão do vetor trial é herdada do doador com probabilidade CR, com garantia de pelo menos uma dimensão via índice jRand aleatório.');
+                layout.addBullet('Seleção greedy: o trial substitui o indivíduo atual apenas se for melhor ou igual, garantindo convergência monotônica.');
+                layout.addText('A ED possui apenas dois hiperparâmetros além do tamanho da população: F (fator de escala, tipicamente 0.4-1.0) e CR (taxa de crossover, tipicamente 0.1-1.0), o que simplifica significativamente o ajuste em comparação com outros métodos.');
+            }
         }
     },
 
@@ -642,22 +736,87 @@ const REPORT_SECTIONS = [
         }
     },
 
-    // ── 5. Implementação ────────────────────────────────────────────────────
+    // ── Resultados do Benchmark ─────────────────────────────────────────────
+    {
+        id: 'benchmark',
+        title: 'Benchmark Estatístico',
+        render(ctx) {
+            const { layout, data } = ctx;
+            const b = data.benchmark;
+            if (!b) return; // Sem dados de benchmark — pula seção
+
+            const keys = b.enabledKeys;
+
+            layout.addSectionHeading('5. Benchmark Estatístico');
+            layout.addText(`Para validação estatística, foi executado um benchmark com ${b.totalRuns} execuções independentes, cada uma com ${b.itersPerRun} iterações. A cada execução, os algoritmos são reinicializados com populações aleatórias distintas, garantindo independência entre amostras.`);
+
+            // 5.1 Estatísticas
+            layout.addSubsectionHeading('5.1 Estatísticas Descritivas');
+            layout.addTable(
+                ['Métrica', ...keys.map(k => ALG_NAMES[k].shortPT)],
+                [
+                    ['Média',        ...keys.map(k => b.stats[k].mean.toFixed(6))],
+                    ['Desvio Padrão', ...keys.map(k => b.stats[k].std.toFixed(6))],
+                    ['Melhor',       ...keys.map(k => b.stats[k].best.toFixed(6))],
+                    ['Pior',         ...keys.map(k => b.stats[k].worst.toFixed(6))],
+                    ['Mediana',      ...keys.map(k => b.stats[k].median.toFixed(6))]
+                ]
+            );
+
+            // 5.2 Vitórias
+            layout.addSubsectionHeading('5.2 Contagem de Vitórias');
+            const winsRows = keys.map(k => [ALG_NAMES[k].shortPT, b.wins[k] || 0, `${Math.round(((b.wins[k] || 0) / b.totalRuns) * 100)}%`]);
+            if (b.wins.tie > 0) {
+                winsRows.push(['Empate', b.wins.tie, `${Math.round((b.wins.tie / b.totalRuns) * 100)}%`]);
+            }
+            layout.addTable(['Algoritmo', 'Vitórias', '%'], winsRows);
+
+            // 5.3 Vencedor do Benchmark
+            layout.addSubsectionHeading('5.3 Resultado');
+            if (b.isTie) {
+                layout.addText('O benchmark resultou em empate técnico entre os algoritmos.');
+            } else {
+                layout.addText(`O vencedor do benchmark foi o ${ALG_NAMES[b.winner.key].shortPT} com ${b.winner.wins} vitórias em ${b.totalRuns} execuções (${Math.round((b.winner.wins / b.totalRuns) * 100)}%).`);
+            }
+
+            // Análise de robustez
+            layout.addSubsectionHeading('5.4 Análise de Robustez');
+            keys.forEach(k => {
+                const s = b.stats[k];
+                const cv = s.mean !== 0 ? ((s.std / Math.abs(s.mean)) * 100).toFixed(1) : 'N/A';
+                layout.addBullet(`${ALG_NAMES[k].shortPT}: CV = ${cv}%, amplitude = ${(s.worst - s.best).toFixed(6)}`);
+            });
+            layout.addText('O coeficiente de variação (CV) indica a estabilidade relativa de cada algoritmo. Valores menores de CV indicam maior consistência entre execuções.');
+        }
+    },
+
+    // ── 5/6. Implementação ──────────────────────────────────────────────────
     {
         id: 'implementacao',
-        title: '5. Implementação',
+        title: 'Implementação',
+        // Nota: a numeração se adapta dinamicamente à presença do benchmark
         render(ctx) {
-            const { layout } = ctx;
+            const { layout, data } = ctx;
+            const secNum = data.benchmark ? '6' : '5';
 
-            layout.addSectionHeading('5. Implementação');
-            layout.addText('O backend em FastAPI executa AG/PSO/ED e expõe uma API para geração de relatório. O frontend em JavaScript usa Plotly para os gráficos 3D e convergência, enviando parâmetros via interface interativa.');
+            layout.addSectionHeading(`${secNum}. Implementação`);
+            layout.addText('A aplicação foi desenvolvida integralmente em JavaScript client-side, permitindo deploy estático no GitHub Pages. O frontend utiliza Plotly.js para os gráficos 3D e convergência, math.js para avaliação de expressões matemáticas, MathLive para teclado virtual de entrada de funções, e jsPDF para geração de relatórios PDF.');
 
-            layout.addSubsectionHeading('5.1 Integração');
-            layout.addBullet('WebSocket para streaming de estados e histórico.');
-            layout.addBullet('Expressões validadas com math.js/numexpr.');
-            layout.addBullet('Relatório exportado em PDF seguindo o template SBC (2025-2026).');
+            layout.addSubsectionHeading(`${secNum}.1 Arquitetura`);
+            layout.addBullet('Classe base OptimizationAlgorithm com interface unificada para AG, PSO e ED.');
+            layout.addBullet('Sistema de snapshot/restore para navegação de iterações.');
+            layout.addBullet('Detecção automática de convergência configurável.');
+            layout.addBullet('Benchmark multi-run com animação em tempo real.');
+            layout.addBullet('Seleção dinâmica de algoritmos (toggle on/off).');
 
-            layout.addSubsectionHeading('5.2 Uso de IA');
+            layout.addSubsectionHeading(`${secNum}.2 Tecnologias`);
+            layout.addBullet('Plotly.js 2.27 — gráficos 3D de superfície e convergência.');
+            layout.addBullet('math.js 11.11 — parsing e avaliação segura de expressões.');
+            layout.addBullet('MathLive 0.100.0 — teclado virtual matemático.');
+            layout.addBullet('jsPDF + jspdf-autotable — geração de relatório PDF no cliente.');
+            layout.addBullet('Jest 29.7 — 30 testes automatizados (CI com GitHub Actions).');
+
+            layout.addSubsectionHeading(`${secNum}.3 Uso de IA`);
             layout.addText('Modelos utilizados:');
             REPORT_AI_MODELS.forEach(m => layout.addBullet(m));
             layout.addText('Prompts utilizados:');
@@ -666,60 +825,121 @@ const REPORT_SECTIONS = [
         }
     },
 
-    // ── 6. Discussão ────────────────────────────────────────────────────────
+    // ── Discussão ───────────────────────────────────────────────────────────
     {
         id: 'discussao',
-        title: '6. Discussão',
+        title: 'Discussão',
         render(ctx) {
             const { layout, data } = ctx;
+            const secNum = data.benchmark ? '7' : '6';
 
-            layout.addSectionHeading('6. Discussão');
+            layout.addSectionHeading(`${secNum}. Discussão`);
             let sub = 1;
             if (data.enabled.ag) {
-                layout.addSubsectionHeading(`6.${sub} Algoritmo Genético`);
-                layout.addBullet('Diversidade via mutação');
-                layout.addBullet('Convergência robusta');
+                layout.addSubsectionHeading(`${secNum}.${sub} Algoritmo Genético`);
+                layout.addText('O AG demonstra boa capacidade de exploração do espaço de busca graças aos operadores genéticos. A mutação gaussiana mantém diversidade populacional, enquanto o crossover BLX-alpha permite exploração interpolativa e extrapolativa entre pais. A seleção por torneio com pressão seletiva moderada equilibra convergência e diversidade.');
+                layout.addBullet('Pontos fortes: manutenção de diversidade, robustez a longo prazo.');
+                layout.addBullet('Pontos fracos: convergência mais lenta que métodos diretos, muitos hiperparâmetros (taxa de mutação, taxa de crossover, tamanho do torneio).');
                 sub++;
             }
             if (data.enabled.pso) {
-                layout.addSubsectionHeading(`6.${sub} PSO`);
-                layout.addBullet('Convergência rápida');
-                layout.addBullet('Comportamento de enxame');
+                layout.addSubsectionHeading(`${secNum}.${sub} PSO`);
+                layout.addText('O PSO se destaca pela velocidade de convergência inicial, guiada pela comunicação social entre partículas. O peso de inércia w controla a transição entre exploração global (w alto) e refinamento local (w baixo). Os coeficientes c1 (cognitivo) e c2 (social) balanceiam experiência individual versus coletiva.');
+                layout.addBullet('Pontos fortes: convergência rápida, poucos parâmetros, paralelizável.');
+                layout.addBullet('Pontos fracos: risco de convergência prematura em funções altamente multimodais, sensível aos valores de w, c1, c2.');
                 sub++;
             }
             if (data.enabled.ed) {
-                layout.addSubsectionHeading(`6.${sub} ED`);
-                layout.addBullet('Poucos parâmetros de controle');
-                layout.addBullet('Robusto em funções multimodais');
-                layout.addBullet('Operação de mutação diferencial eficiente');
+                layout.addSubsectionHeading(`${secNum}.${sub} Evolução Diferencial`);
+                layout.addText('A ED combina simplicidade de implementação com eficácia comprovada em otimização global contínua. Com apenas dois parâmetros de controle (F e CR), é significativamente mais simples de ajustar que AG ou PSO.');
+                layout.addBullet('Mutação diferencial: a perturbação é auto-adaptativa pois utiliza diferenças entre vetores da própria população — em populações diversas as perturbações são grandes (exploração), e em populações convergentes são pequenas (refinamento).');
+                layout.addBullet('Crossover binomial com jRand: garante que pelo menos uma dimensão do vetor doador é incorporada ao trial, evitando stagnação.');
+                layout.addBullet('Seleção greedy: garante convergência monotônica — o fitness nunca piora.');
+                layout.addBullet('Pontos fortes: poucos parâmetros, robusto em funções multimodais, convergência monotônica.');
+                layout.addBullet('Pontos fracos: pode ser mais lento que PSO em funções unimodais simples.');
+            }
+
+            // Benchmark discussion
+            if (data.benchmark) {
+                layout.addSubsectionHeading(`${secNum}.${sub + 1} Análise do Benchmark`);
+                const b = data.benchmark;
+                layout.addText(`O benchmark com ${b.totalRuns} execuções independentes permite uma avaliação estatisticamente mais robusta do que uma única simulação. A variabilidade observada (desvio padrão e coeficiente de variação) revela a sensibilidade de cada algoritmo às condições iniciais aleatórias.`);
+                if (!b.isTie) {
+                    layout.addText(`O ${ALG_NAMES[b.winner.key].shortPT} apresentou superioridade estatística com ${b.winner.wins} vitórias (${Math.round((b.winner.wins / b.totalRuns) * 100)}%), sugerindo que é a melhor escolha para este tipo de função objetivo e configuração de parâmetros.`);
+                } else {
+                    layout.addText('O empate técnico sugere que os algoritmos possuem capacidades similares para esta configuração, sendo a escolha entre eles dependente de critérios adicionais como velocidade de convergência ou estabilidade.');
+                }
             }
         }
     },
 
-    // ── 7. Conclusões ───────────────────────────────────────────────────────
+    // ── Histórico de Desenvolvimento do ED ──────────────────────────────────
     {
-        id: 'conclusoes',
-        title: '7. Conclusões',
+        id: 'historico_ed',
+        title: 'Histórico ED',
         render(ctx) {
             const { layout, data } = ctx;
-            const keys = data.enabledKeys;
+            if (!data.enabled.ed) return; // Só mostra se ED estiver habilitado
 
-            layout.addSectionHeading('7. Conclusões');
-            layout.addBullet(`${keys.length === 1 ? 'O algoritmo é eficaz' : 'Os algoritmos são eficazes'}.`);
-            if (data.enabled.pso) layout.addBullet('PSO: velocidade inicial.');
-            if (data.enabled.ag)  layout.addBullet('AG: robustez a longo prazo.');
-            if (data.enabled.ed)  layout.addBullet('ED: eficiência com poucos parâmetros.');
+            const secNum = data.benchmark ? '8' : '7';
+
+            layout.addSectionHeading(`${secNum}. Histórico de Desenvolvimento da ED`);
+            layout.addText('A Evolução Diferencial foi implementada neste projeto ao longo de múltiplas iterações de desenvolvimento assistido por IA. A seguir, o cronograma completo de cada fase:');
+
+            ED_DEVELOPMENT_HISTORY.forEach((entry, i) => {
+                layout.addSubsectionHeading(`${secNum}.${i + 1} ${entry.phase}`);
+                layout.addText(entry.description);
+            });
         }
     },
 
-    // ── 8. Disponibilidade ──────────────────────────────────────────────────
+    // ── Conclusões ──────────────────────────────────────────────────────────
+    {
+        id: 'conclusoes',
+        title: 'Conclusões',
+        render(ctx) {
+            const { layout, data } = ctx;
+            const keys = data.enabledKeys;
+            let secNum;
+            if (data.enabled.ed && data.benchmark) secNum = '9';
+            else if (data.enabled.ed || data.benchmark) secNum = '8';
+            else secNum = '7';
+
+            layout.addSectionHeading(`${secNum}. Conclusões`);
+
+            if (keys.length > 1) {
+                layout.addText('A análise comparativa dos algoritmos metaheurísticos implementados permite as seguintes conclusões:');
+            }
+
+            if (data.enabled.ag) layout.addBullet('O AG demonstra robustez a longo prazo e boa exploração do espaço de busca mediante operadores genéticos.');
+            if (data.enabled.pso) layout.addBullet('O PSO se destaca pela velocidade de convergência inicial, sendo adequado quando soluções rápidas aproximadas são suficientes.');
+            if (data.enabled.ed) layout.addBullet('A ED oferece excelente relação custo-benefício, combinando poucos parâmetros de controle (F e CR) com convergência monotônica e robustez em funções multimodais.');
+
+            if (data.benchmark) {
+                const b = data.benchmark;
+                if (!b.isTie) {
+                    layout.addBullet(`O benchmark estatístico com ${b.totalRuns} execuções confirmou a superioridade do ${ALG_NAMES[b.winner.key].shortPT} para a configuração testada.`);
+                } else {
+                    layout.addBullet(`O benchmark com ${b.totalRuns} execuções resultou em empate técnico, indicando desempenho comparável entre os algoritmos testados.`);
+                }
+            }
+
+            layout.addText('Como trabalhos futuros, sugere-se a implementação de variantes adaptativas (JADE, SHADE para ED; PSO com inércia decrescente) e a avaliação em funções de benchmark padronizadas (CEC 2017).');
+        }
+    },
+
+    // ── Disponibilidade ─────────────────────────────────────────────────────
     {
         id: 'disponibilidade',
-        title: '8. Disponibilidade',
+        title: 'Disponibilidade',
         render(ctx) {
-            const { layout } = ctx;
+            const { layout, data } = ctx;
+            let secNum;
+            if (data.enabled.ed && data.benchmark) secNum = '10';
+            else if (data.enabled.ed || data.benchmark) secNum = '9';
+            else secNum = '8';
 
-            layout.addSectionHeading('8. Disponibilidade');
+            layout.addSectionHeading(`${secNum}. Disponibilidade`);
             layout.addText('A simulação interativa está disponível em:');
             layout.addLink(REPORT_CONFIG.projectUrl);
         }
