@@ -284,10 +284,14 @@
             </div>
         </details>
 
-        <main>
+        <main data-algo-count="3">
             <!-- Genetic Algorithm Card -->
             <div class="card algorithm-card" data-algo="ag">
                 <div class="card-header">
+                    <label class="algo-toggle" title="Enable/Disable AG">
+                        <input type="checkbox" id="algo_ag_enabled" checked onchange="onAlgoToggle()">
+                        <span class="algo-toggle-slider"></span>
+                    </label>
                     <h2 data-i18n="ag_title">Genetic Algorithm</h2>
                     <span class="badge ag-badge" onclick="toggleFocus('ag')" role="button" tabindex="0" title="Focus AG">AG</span>
                 </div>
@@ -324,6 +328,10 @@
             <!-- PSO Card -->
             <div class="card algorithm-card" data-algo="pso">
                 <div class="card-header">
+                    <label class="algo-toggle" title="Enable/Disable PSO">
+                        <input type="checkbox" id="algo_pso_enabled" checked onchange="onAlgoToggle()">
+                        <span class="algo-toggle-slider"></span>
+                    </label>
                     <h2 data-i18n="pso_title">Particle Swarm</h2>
                     <span class="badge pso-badge" onclick="toggleFocus('pso')" role="button" tabindex="0" title="Focus PSO">PSO</span>
                 </div>
@@ -360,6 +368,10 @@
             <!-- ED Card -->
             <div class="card algorithm-card" data-algo="ed">
                 <div class="card-header">
+                    <label class="algo-toggle" title="Enable/Disable ED">
+                        <input type="checkbox" id="algo_ed_enabled" checked onchange="onAlgoToggle()">
+                        <span class="algo-toggle-slider"></span>
+                    </label>
                     <h2 data-i18n="ed_title">Differential Evolution</h2>
                     <span class="badge ed-badge" onclick="toggleFocus('ed')" role="button" tabindex="0" title="Focus ED">ED</span>
                 </div>
