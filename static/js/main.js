@@ -1439,8 +1439,21 @@ function benchmarkAnimatedStep() {
     // Update progress
     updateBenchmarkProgress();
 
+    // Check convergence (respect model's convergence settings)
+    const convergenceEnabled = document.getElementById('convergence_enabled')?.checked || false;
+    let runDone = benchmarkCurrentIter >= benchmarkItersPerRun;
+
+    if (!runDone && convergenceEnabled) {
+        const agState = gaInstance.getState();
+        const psoState = psoInstance.getState();
+        const edState = edInstance.getState();
+        if (agState.converged || psoState.converged || edState.converged) {
+            runDone = true;
+        }
+    }
+
     // Check if this run is done
-    if (benchmarkCurrentIter >= benchmarkItersPerRun) {
+    if (runDone) {
         // Record results for this run
         benchmarkResults.ag.push(gaInstance.bestScore);
         benchmarkResults.pso.push(psoInstance.bestScore);
