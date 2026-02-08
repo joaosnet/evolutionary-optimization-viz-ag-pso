@@ -32,9 +32,10 @@ jobs:
 
       - name: Lint (check syntax)
         run: |
-          npx acorn --ecma2020 static/js/algorithms/base.js > /dev/null
-          npx acorn --ecma2020 static/js/algorithms/ga.js > /dev/null
-          npx acorn --ecma2020 static/js/algorithms/pso.js > /dev/null
-          npx acorn --ecma2020 static/js/algorithms/ed.js > /dev/null
-          npx acorn --ecma2020 static/js/main.js > /dev/null
-          npx acorn --ecma2020 static/js/benchmarks.js > /dev/null
+          npx acorn --ecma2022 static/js/algorithms/base.js > /dev/null
+          npx acorn --ecma2022 static/js/algorithms/ga.js > /dev/null
+          npx acorn --ecma2022 static/js/algorithms/pso.js > /dev/null
+          npx acorn --ecma2022 static/js/algorithms/ed.js > /dev/null
+          npx acorn --ecma2022 static/js/main.js > /dev/null
+          npx acorn --ecma2022 static/js/benchmarks.js > /dev/null
+          npx acorn --ecma2022 static/js/report.js > /dev/null
