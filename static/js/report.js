@@ -37,8 +37,8 @@ const REPORT_CONFIG = {
 // ─── Nomes dos Algoritmos (para reuso) ──────────────────────────────────────
 
 const ALG_NAMES = {
-    ag: { fullPT: 'Algoritmo Genético (AG)', fullEN: 'Genetic Algorithm (GA)',    shortPT: 'AG', shortEN: 'GA' },
-    pso:{ fullPT: 'Otimização por Enxame de Partículas (PSO)', fullEN: 'Particle Swarm Optimization (PSO)', shortPT: 'PSO', shortEN: 'PSO' },
+    ag: { fullPT: 'Algoritmo Genético (AG)', fullEN: 'Genetic Algorithm (GA)', shortPT: 'AG', shortEN: 'GA' },
+    pso: { fullPT: 'Otimização por Enxame de Partículas (PSO)', fullEN: 'Particle Swarm Optimization (PSO)', shortPT: 'PSO', shortEN: 'PSO' },
     ed: { fullPT: 'Evolução Diferencial (ED)', fullEN: 'Differential Evolution (DE)', shortPT: 'ED', shortEN: 'DE' }
 };
 
@@ -136,7 +136,7 @@ class PdfLayout {
         this.cfg = config;
 
         const m = config.margins;
-        this.pageWidth  = doc.internal.pageSize.width;   // 210mm
+        this.pageWidth = doc.internal.pageSize.width;   // 210mm
         this.pageHeight = doc.internal.pageSize.height;   // 297mm
         this.contentWidth = this.pageWidth - m.left - m.right;
         this.colWidth = (this.contentWidth - config.colGap) / 2;
@@ -337,7 +337,40 @@ function collectReportData() {
                     return mode === 'max' ? b.mean - a.mean : a.mean - b.mean;
                 });
 
-            benchmark = { stats, wins, totalRuns, itersPerRun, enabledKeys: bKeys, winner: sorted[0], isTie: sorted.length >= 2 && sorted[0].wins === sorted[1].wins };
+            // CEC-specific data
+            let errorStats = null, successRate = null, checkpoints = null, wilcoxon = null;
+            let maxFEs = 0, globalMin = 0;
+
+            if (typeof benchmarkErrorResults !== 'undefined' && benchmarkErrorResults) {
+                errorStats = {};
+                bKeys.forEach(k => {
+                    if (benchmarkErrorResults[k] && benchmarkErrorResults[k].length > 0) {
+                        errorStats[k] = computeStats(benchmarkErrorResults[k]);
+                    }
+                });
+            }
+            if (typeof benchmarkSuccessCount !== 'undefined' && benchmarkSuccessCount) {
+                successRate = {};
+                bKeys.forEach(k => { successRate[k] = benchmarkSuccessCount[k] || 0; });
+            }
+            if (typeof benchmarkCheckpoints !== 'undefined' && benchmarkCheckpoints) {
+                checkpoints = benchmarkCheckpoints;
+            }
+            if (typeof benchmarkWilcoxon !== 'undefined' && benchmarkWilcoxon) {
+                wilcoxon = benchmarkWilcoxon;
+            }
+            if (typeof benchmarkMaxFEs !== 'undefined') maxFEs = benchmarkMaxFEs;
+            if (typeof benchmarkGlobalMin !== 'undefined') globalMin = benchmarkGlobalMin;
+
+            benchmark = {
+                stats, wins, totalRuns, itersPerRun, enabledKeys: bKeys,
+                winner: sorted[0],
+                isTie: sorted.length >= 2 && sorted[0].wins === sorted[1].wins,
+                // CEC data
+                errorStats, successRate, checkpoints, wilcoxon, maxFEs, globalMin,
+                successThreshold: (typeof CEC_SUCCESS_THRESHOLD !== 'undefined') ? CEC_SUCCESS_THRESHOLD : 1e-8,
+                checkpointPcts: (typeof CEC_CHECKPOINT_PCTS !== 'undefined') ? CEC_CHECKPOINT_PCTS : []
+            };
         }
     }
 
@@ -345,28 +378,28 @@ function collectReportData() {
         enabled,
         enabledKeys,
         params: {
-            pop_size:    parseInt(document.getElementById('pop_size')?.value) || 50,
-            ag_mutation:  parseFloat(document.getElementById('ag_mutation')?.value) || 0.01,
+            pop_size: parseInt(document.getElementById('pop_size')?.value) || 50,
+            ag_mutation: parseFloat(document.getElementById('ag_mutation')?.value) || 0.01,
             ag_crossover: parseFloat(document.getElementById('ag_crossover')?.value) || 0.7,
-            pso_w:  parseFloat(document.getElementById('pso_w')?.value)  || 0.5,
+            pso_w: parseFloat(document.getElementById('pso_w')?.value) || 0.5,
             pso_c1: parseFloat(document.getElementById('pso_c1')?.value) || 1.5,
             pso_c2: parseFloat(document.getElementById('pso_c2')?.value) || 1.5,
-            ed_f:   parseFloat(document.getElementById('ed_f')?.value)   || 0.8,
-            ed_cr:  parseFloat(document.getElementById('ed_cr')?.value)  || 0.9,
+            ed_f: parseFloat(document.getElementById('ed_f')?.value) || 0.8,
+            ed_cr: parseFloat(document.getElementById('ed_cr')?.value) || 0.9,
             optimization_mode: getOptimizationMode(),
             target_value: getTargetValue(),
             function_expr: currentExpression,
             dimensions: currentDimensions
         },
         scores: {
-            ag:  { best_score: historyCache.ag.length  > 0 ? historyCache.ag[historyCache.ag.length - 1]   : null, iteration: currentIteration },
+            ag: { best_score: historyCache.ag.length > 0 ? historyCache.ag[historyCache.ag.length - 1] : null, iteration: currentIteration },
             pso: { best_score: historyCache.pso.length > 0 ? historyCache.pso[historyCache.pso.length - 1] : null, iteration: currentIteration },
-            ed:  { best_score: historyCache.ed.length  > 0 ? historyCache.ed[historyCache.ed.length - 1]   : null, iteration: currentIteration }
+            ed: { best_score: historyCache.ed.length > 0 ? historyCache.ed[historyCache.ed.length - 1] : null, iteration: currentIteration }
         },
         history: {
-            ag:  historyCache.ag,
+            ag: historyCache.ag,
             pso: historyCache.pso,
-            ed:  historyCache.ed
+            ed: historyCache.ed
         },
         benchmark
     };
@@ -491,10 +524,10 @@ async function renderLatexFunctionImage(expr) {
 //  Helpers — texto dinâmico
 // =============================================================================
 
-function enabledFullPT(keys)    { return keys.map(k => ALG_NAMES[k].fullPT).join(', '); }
-function enabledFullEN(keys)    { return keys.map(k => ALG_NAMES[k].fullEN).join(', '); }
-function enabledShortPT(keys)   { return keys.map(k => ALG_NAMES[k].shortPT).join(', '); }
-function enabledShortTitle(keys){ return keys.map(k => ALG_NAMES[k].shortPT).join(' vs '); }
+function enabledFullPT(keys) { return keys.map(k => ALG_NAMES[k].fullPT).join(', '); }
+function enabledFullEN(keys) { return keys.map(k => ALG_NAMES[k].fullEN).join(', '); }
+function enabledShortPT(keys) { return keys.map(k => ALG_NAMES[k].shortPT).join(', '); }
+function enabledShortTitle(keys) { return keys.map(k => ALG_NAMES[k].shortPT).join(' vs '); }
 
 function determineWinner(data) {
     const keys = data.enabledKeys;
@@ -810,7 +843,7 @@ const REPORT_SECTIONS = [
                 ['Métrica', ...keys.map(k => ALG_NAMES[k].shortPT)],
                 [
                     ['Melhor Fitness', ...keys.map(k => data.scores[k]?.best_score?.toFixed(6) || 'N/A')],
-                    ['Iterações',      ...keys.map(k => data.scores[k]?.iteration ?? 'N/A')]
+                    ['Iterações', ...keys.map(k => data.scores[k]?.iteration ?? 'N/A')]
                 ]
             );
 
@@ -850,42 +883,118 @@ const REPORT_SECTIONS = [
         }
     },
 
-    // ── Resultados do Benchmark ─────────────────────────────────────────────
+    // ── Resultados do Benchmark (CEC) ────────────────────────────────────────
     {
         id: 'benchmark',
-        title: 'Benchmark Estatístico',
+        title: 'Benchmark CEC',
         render(ctx) {
             const { layout, data } = ctx;
             const b = data.benchmark;
-            if (!b) return; // Sem dados de benchmark — pula seção
+            if (!b) return;
 
             const keys = b.enabledKeys;
-
             const isSingle = keys.length === 1;
+            const fmt = (v) => { if (v === 0) return '0.00e+00'; if (!Number.isFinite(v)) return 'Inf'; return v.toExponential(2); };
 
-            layout.addSectionHeading('5. Benchmark Estatístico');
-            const benchIntro = isSingle
-                ? `Para validação estatística, foi executado um benchmark com ${b.totalRuns} execuções independentes do ${ALG_NAMES[keys[0]].shortPT}, cada uma com ${b.itersPerRun} iterações. A cada execução, o algoritmo é reinicializado com população aleatória distinta, garantindo independência entre amostras.`
-                : `Para validação estatística, foi executado um benchmark com ${b.totalRuns} execuções independentes, cada uma com ${b.itersPerRun} iterações. A cada execução, os algoritmos são reinicializados com populações aleatórias distintas, garantindo independência entre amostras.`;
-            layout.addText(benchIntro);
+            layout.addSectionHeading('5. Benchmark Estatístico (Critérios IEEE CEC)');
 
-            // 5.1 Estatísticas
+            // 5.1 Protocolo CEC
             let subSec = 1;
-            layout.addSubsectionHeading(`5.${subSec} Estatísticas Descritivas`);
-            layout.addTable(
-                ['Métrica', ...keys.map(k => ALG_NAMES[k].shortPT)],
-                [
-                    ['Média',        ...keys.map(k => b.stats[k].mean.toFixed(6))],
-                    ['Desvio Padrão', ...keys.map(k => b.stats[k].std.toFixed(6))],
-                    ['Melhor',       ...keys.map(k => b.stats[k].best.toFixed(6))],
-                    ['Pior',         ...keys.map(k => b.stats[k].worst.toFixed(6))],
-                    ['Mediana',      ...keys.map(k => b.stats[k].median.toFixed(6))]
-                ]
-            );
+            layout.addSubsectionHeading(`5.${subSec} Protocolo CEC`);
+            const protocolIntro = isSingle
+                ? `O benchmark seguiu os critérios do IEEE CEC (Congress on Evolutionary Computation). Foram executadas ${b.totalRuns} execuções independentes do ${ALG_NAMES[keys[0]].shortPT}.`
+                : `O benchmark seguiu os critérios do IEEE CEC (Congress on Evolutionary Computation). Foram executadas ${b.totalRuns} execuções independentes de cada algoritmo.`;
+            layout.addText(protocolIntro);
+            layout.addBullet(`MaxFEs: ${b.maxFEs ? b.maxFEs.toLocaleString() : '20.000'} (10.000 × D)`);
+            layout.addBullet(`Iterações por execução: ${b.itersPerRun}`);
+            layout.addBullet(`Ótimo global (f*): ${b.globalMin || 0}`);
+            layout.addBullet(`Erro: ε = |f(x*) − f*|`);
+            layout.addBullet(`Limiar de sucesso: ε < ${b.successThreshold || 1e-8}`);
+            layout.addText('Referência: Awad, N. H., et al. "Problem Definitions and Evaluation Criteria for the CEC 2017 Special Session." NTU Tech Report, 2016.');
 
-            // Vitórias e Vencedor — apenas se há mais de 1 algoritmo
+            // 5.2 Tabela de Erro CEC
+            subSec++;
+            if (b.errorStats && Object.keys(b.errorStats).length > 0) {
+                layout.addSubsectionHeading(`5.${subSec} Tabela de Erro (Formato CEC)`);
+                layout.addTable(
+                    ['Métrica', ...keys.map(k => ALG_NAMES[k].shortPT)],
+                    [
+                        ['Mean', ...keys.map(k => b.errorStats[k] ? fmt(b.errorStats[k].mean) : 'N/A')],
+                        ['Std', ...keys.map(k => b.errorStats[k] ? fmt(b.errorStats[k].std) : 'N/A')],
+                        ['Best', ...keys.map(k => b.errorStats[k] ? fmt(b.errorStats[k].best) : 'N/A')],
+                        ['Worst', ...keys.map(k => b.errorStats[k] ? fmt(b.errorStats[k].worst) : 'N/A')],
+                        ['Median', ...keys.map(k => b.errorStats[k] ? fmt(b.errorStats[k].median) : 'N/A')]
+                    ],
+                    { fontSize: 8, cellPadding: 1.5 }
+                );
+            }
+
+            // 5.3 Success Rate
+            subSec++;
+            if (b.successRate) {
+                layout.addSubsectionHeading(`5.${subSec} Taxa de Sucesso`);
+                layout.addTable(
+                    ['Algoritmo', 'Sucessos', 'Taxa (%)'],
+                    keys.map(k => [
+                        ALG_NAMES[k].shortPT,
+                        `${b.successRate[k] || 0}/${b.totalRuns}`,
+                        `${((b.successRate[k] || 0) / b.totalRuns * 100).toFixed(1)}%`
+                    ])
+                );
+                layout.addText(`Sucesso definido como erro ε < ${b.successThreshold || 1e-8}.`);
+            }
+
+            // 5.4 Erro nos Checkpoints FEs
+            subSec++;
+            if (b.checkpoints && b.checkpointPcts && b.checkpointPcts.length > 0) {
+                layout.addSubsectionHeading(`5.${subSec} Convergência por FEs`);
+                const cpRows = b.checkpointPcts.map(pct => {
+                    const feCount = Math.round(pct * (b.maxFEs || 20000));
+                    const row = [`${(pct * 100).toFixed(0)}% (${feCount.toLocaleString()})`];
+                    keys.forEach(k => {
+                        let sum = 0, count = 0;
+                        if (b.checkpoints[k]) {
+                            b.checkpoints[k].forEach(runData => {
+                                if (runData && runData[pct] !== undefined) { sum += runData[pct]; count++; }
+                            });
+                        }
+                        row.push(count > 0 ? fmt(sum / count) : 'N/A');
+                    });
+                    return row;
+                });
+                layout.addTable(
+                    ['FEs %', ...keys.map(k => ALG_NAMES[k].shortPT)],
+                    cpRows,
+                    { fontSize: 7, cellPadding: 1 }
+                );
+                layout.addText('Tabela mostra a média do erro nas execuções independentes em cada checkpoint de FEs.');
+            }
+
+            // 5.5 Wilcoxon Signed-Rank Test
+            subSec++;
+            if (b.wilcoxon && keys.length >= 2) {
+                layout.addSubsectionHeading(`5.${subSec} Teste de Wilcoxon Signed-Rank`);
+                layout.addText('Comparação estatística par-a-par dos erros finais (nível de significância α = 0.05).');
+                const wilcoxonRows = [];
+                for (const pairKey of Object.keys(b.wilcoxon)) {
+                    const w = b.wilcoxon[pairKey];
+                    const [a, , bk] = pairKey.split('_');
+                    const sigLabel = w.result === '+' ? `${ALG_NAMES[a]?.shortPT || a}+`
+                        : w.result === '−' ? `${ALG_NAMES[bk]?.shortPT || bk}+` : '=';
+                    wilcoxonRows.push([
+                        `${ALG_NAMES[a]?.shortPT || a} vs ${ALG_NAMES[bk]?.shortPT || bk}`,
+                        w.Rplus.toFixed(1), w.Rminus.toFixed(1),
+                        w.p < 0.001 ? '<0.001' : w.p.toFixed(4),
+                        sigLabel
+                    ]);
+                }
+                layout.addTable(['Par', 'R+', 'R−', 'p-value', 'Sig.'], wilcoxonRows, { fontSize: 8 });
+                layout.addText('Referência: Wilcoxon, F. "Individual Comparisons by Ranking Methods." Biometrics Bulletin, 1945.');
+            }
+
+            // 5.6 Vitórias
+            subSec++;
             if (!isSingle) {
-                subSec++;
                 layout.addSubsectionHeading(`5.${subSec} Contagem de Vitórias`);
                 const winsRows = keys.map(k => [ALG_NAMES[k].shortPT, b.wins[k] || 0, `${Math.round(((b.wins[k] || 0) / b.totalRuns) * 100)}%`]);
                 if (b.wins.tie > 0) {
@@ -893,8 +1002,6 @@ const REPORT_SECTIONS = [
                 }
                 layout.addTable(['Algoritmo', 'Vitórias', '%'], winsRows);
 
-                subSec++;
-                layout.addSubsectionHeading(`5.${subSec} Resultado`);
                 if (b.isTie) {
                     layout.addText('O benchmark resultou em empate técnico entre os algoritmos.');
                 } else {
@@ -902,7 +1009,21 @@ const REPORT_SECTIONS = [
                 }
             }
 
-            // Análise de robustez
+            // 5.7 Ranking Final
+            subSec++;
+            if (b.errorStats && keys.length >= 2) {
+                layout.addSubsectionHeading(`5.${subSec} Ranking Final`);
+                const ranked = keys.map(k => ({
+                    name: ALG_NAMES[k].shortPT,
+                    meanError: b.errorStats[k]?.mean || 0
+                })).sort((a, b2) => a.meanError - b2.meanError);
+                layout.addTable(
+                    ['#', 'Algoritmo', 'Mean Error'],
+                    ranked.map((r, idx) => [idx + 1, r.name, fmt(r.meanError)])
+                );
+            }
+
+            // 5.X Robustez
             subSec++;
             layout.addSubsectionHeading(`5.${subSec} Análise de Robustez`);
             keys.forEach(k => {
@@ -910,7 +1031,7 @@ const REPORT_SECTIONS = [
                 const cv = s.mean !== 0 ? ((s.std / Math.abs(s.mean)) * 100).toFixed(1) : 'N/A';
                 layout.addBullet(`${ALG_NAMES[k].shortPT}: CV = ${cv}%, amplitude = ${(s.worst - s.best).toFixed(6)}`);
             });
-            layout.addText('O coeficiente de variação (CV) indica a estabilidade relativa de cada algoritmo. Valores menores de CV indicam maior consistência entre execuções.');
+            layout.addText('O coeficiente de variação (CV) indica a estabilidade relativa de cada algoritmo.');
         }
     },
 

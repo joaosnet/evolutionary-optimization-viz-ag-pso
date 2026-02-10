@@ -1884,6 +1884,56 @@ main[data-focus="ed"] .algorithm-card[data-algo="ed"] {
     font-size: 1rem;
 }
 
+/* ── CEC-specific table styles ────────────────────────────── */
+.cec-section-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--accent-amber);
+    margin: 1.5rem 0 0.5rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.cec-section-title:first-child {
+    margin-top: 0;
+}
+
+.cec-table {
+    font-size: 0.78rem;
+}
+
+.cec-table td,
+.cec-table th {
+    padding: 0.4rem 0.6rem;
+}
+
+.cec-checkpoint-table {
+    font-size: 0.72rem;
+}
+
+.cec-checkpoint-table td,
+.cec-checkpoint-table th {
+    padding: 0.3rem 0.5rem;
+}
+
+.wilcoxon-plus {
+    font-weight: 700;
+    color: var(--accent-teal);
+}
+
+.wilcoxon-minus {
+    font-weight: 700;
+    color: var(--accent-rose);
+}
+
+.wilcoxon-equal {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
 /* Wins Chart Bars */
 .win-bar-row {
     display: flex;

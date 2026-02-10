@@ -191,7 +191,15 @@ const translations = {
         stat_best: "Best",
         stat_worst: "Worst",
         stat_median: "Median",
-        stat_wins: "Wins"
+        stat_wins: "Wins",
+        cec_error_table: "Error Table (CEC Format)",
+        cec_success_rate: "Success Rate",
+        cec_checkpoints: "Error at FE Checkpoints",
+        cec_wilcoxon: "Wilcoxon Signed-Rank Test",
+        cec_ranking: "Final Ranking",
+        cec_algorithm: "Algorithm",
+        cec_pair: "Pair",
+        cec_significance: "Sig."
     },
     pt: {
         eyebrow: "Otimização ao Vivo",
@@ -266,7 +274,15 @@ const translations = {
         stat_best: "Melhor",
         stat_worst: "Pior",
         stat_median: "Mediana",
-        stat_wins: "Vitórias"
+        stat_wins: "Vitórias",
+        cec_error_table: "Tabela de Erro (Formato CEC)",
+        cec_success_rate: "Taxa de Sucesso",
+        cec_checkpoints: "Erro nos Checkpoints de FEs",
+        cec_wilcoxon: "Teste de Wilcoxon Signed-Rank",
+        cec_ranking: "Ranking Final",
+        cec_algorithm: "Algoritmo",
+        cec_pair: "Par",
+        cec_significance: "Sig."
     }
 };
 
@@ -528,7 +544,7 @@ function showWebGLNotice() {
         functionErrorEl.textContent = translations[currentLang].webgl_disabled_msg || 'WebGL is disabled — using 2D fallbacks.';
         functionErrorEl.classList.add('warning-message');
     }
-} 
+}
 
 function getSeriesNames() {
     return {
@@ -542,7 +558,7 @@ function getSeriesNames() {
 if (typeof window !== 'undefined') {
     // show the notice when script loads; window.onload will also call initPlots
     showWebGLNotice();
-} 
+}
 
 function getNumberValue(id, fallback) {
     const el = document.getElementById(id);
@@ -682,7 +698,7 @@ function initPlots() {
     ], layoutConvergence, { responsive: true, displayModeBar: false });
 
     updatePlotLanguage();
-} 
+}
 
 // --- Local Simulation (replaces WebSocket) ---
 
@@ -1419,7 +1435,7 @@ function toggleFocus(algo) {
 }
 
 // Keyboard accessibility for badges (Enter/Space)
-document.addEventListener('keydown', function(e) {
+document.addEventListener('keydown', function (e) {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('badge')) {
         e.preventDefault();
         e.target.click();
@@ -1442,6 +1458,17 @@ let benchmarkRunIndex = 0;
 let benchmarkTotalRuns = 0;
 let benchmarkItersPerRun = 0;
 let benchmarkCurrentIter = 0;
+
+// --- IEEE CEC Benchmark State ---
+let benchmarkTotalFEs = 0;          // FEs accumulated in current run
+let benchmarkMaxFEs = 0;            // Budget = 10000 * D
+let benchmarkGlobalMin = 0;         // Known optimal value for error calc
+let benchmarkErrorResults = null;   // { ag: [errors per run], pso: [...], ed: [...] }
+let benchmarkSuccessCount = null;   // { ag: count, pso: count, ed: count }
+let benchmarkCheckpoints = null;    // { ag: [[checkpoint errors per run]], ... }
+let benchmarkWilcoxon = null;       // Computed after benchmark finishes
+const CEC_SUCCESS_THRESHOLD = 1e-8;
+const CEC_CHECKPOINT_PCTS = [0.01, 0.02, 0.03, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
 
 function runBenchmark() {
     if (benchmarkRunning) return;
@@ -1481,6 +1508,29 @@ function runBenchmark() {
     benchmarkRunIndex = 0;
     benchmarkCurrentIter = 0;
 
+    // --- CEC initialization ---
+    const dims = currentDimensions || 2;
+    benchmarkMaxFEs = 10000 * dims;
+    // Detect global minimum from BENCHMARKS registry
+    benchmarkGlobalMin = 0;
+    if (typeof BENCHMARKS !== 'undefined' && currentExpression) {
+        for (const key of Object.keys(BENCHMARKS)) {
+            if (BENCHMARKS[key].expression === currentExpression) {
+                benchmarkGlobalMin = BENCHMARKS[key].globalMin || 0;
+                break;
+            }
+        }
+    }
+    benchmarkErrorResults = { ag: [], pso: [], ed: [] };
+    benchmarkSuccessCount = { ag: 0, pso: 0, ed: 0 };
+    benchmarkCheckpoints = { ag: [], pso: [], ed: [] };
+    benchmarkWilcoxon = null;
+
+    // Compute max iterations from MaxFEs
+    const popSize = parseInt(document.getElementById('pop_size')?.value) || 50;
+    const maxItersFromFEs = Math.ceil(benchmarkMaxFEs / popSize);
+    benchmarkItersPerRun = Math.min(benchmarkItersPerRun, maxItersFromFEs);
+
     // Start first run
     startBenchmarkRun();
 }
@@ -1518,6 +1568,7 @@ function startBenchmarkRun() {
     }
 
     benchmarkCurrentIter = 0;
+    benchmarkTotalFEs = 0; // Reset FE counter for this run
 
     // Reset convergence plot for this run
     try {
@@ -1560,6 +1611,10 @@ function benchmarkAnimatedStep() {
 
     benchmarkCurrentIter++;
 
+    // --- CEC: Count Function Evaluations ---
+    const popSize = parseInt(document.getElementById('pop_size')?.value) || 50;
+    benchmarkTotalFEs += popSize; // Each step evaluates the entire population
+
     // Record history and update scores for enabled algorithms
     let currentIter = benchmarkCurrentIter;
     const seriesNames = getSeriesNames();
@@ -1595,8 +1650,10 @@ function benchmarkAnimatedStep() {
         if (WEBGL_AVAILABLE) {
             data = [
                 { ...surfaceTrace, z: cachedSurfaceZ, opacity },
-                { x: xs, y: ys, z: zs, mode: 'markers', type: 'scatter3d',
-                  marker: { size: pointSize, color }, name: seriesName }
+                {
+                    x: xs, y: ys, z: zs, mode: 'markers', type: 'scatter3d',
+                    marker: { size: pointSize, color }, name: seriesName
+                }
             ];
         } else {
             data = [
@@ -1631,7 +1688,7 @@ function benchmarkAnimatedStep() {
 
     // Check convergence (respect model's convergence settings)
     const convergenceEnabled = document.getElementById('convergence_enabled')?.checked || false;
-    let runDone = benchmarkCurrentIter >= benchmarkItersPerRun;
+    let runDone = benchmarkCurrentIter >= benchmarkItersPerRun || benchmarkTotalFEs >= benchmarkMaxFEs;
 
     if (!runDone && convergenceEnabled) {
         const agConv = enabled.ag && gaInstance ? gaInstance.getState().converged : false;
@@ -1642,13 +1699,33 @@ function benchmarkAnimatedStep() {
         }
     }
 
+    // --- CEC: Record error at checkpoints ---
+    const feRatio = benchmarkTotalFEs / benchmarkMaxFEs;
+    const enabledKeys = getEnabledKeys();
+
     // Check if this run is done
     if (runDone) {
         // Record results for enabled algorithms
-        const enabledKeys = getEnabledKeys();
         enabledKeys.forEach(k => {
             const inst = k === 'ag' ? gaInstance : k === 'pso' ? psoInstance : edInstance;
-            if (inst) benchmarkResults[k].push(inst.bestScore);
+            if (inst) {
+                benchmarkResults[k].push(inst.bestScore);
+                // CEC: Record error = |bestScore - globalMin|
+                const error = Math.abs(inst.bestScore - benchmarkGlobalMin);
+                benchmarkErrorResults[k].push(error);
+                // CEC: Success if error < threshold
+                if (error < CEC_SUCCESS_THRESHOLD) benchmarkSuccessCount[k]++;
+                // CEC: Record checkpoint errors (final state at 100%)
+                if (!benchmarkCheckpoints[k][benchmarkRunIndex]) {
+                    benchmarkCheckpoints[k][benchmarkRunIndex] = {};
+                }
+                // Fill all remaining checkpoints with final error
+                CEC_CHECKPOINT_PCTS.forEach(pct => {
+                    if (benchmarkCheckpoints[k][benchmarkRunIndex][pct] === undefined) {
+                        benchmarkCheckpoints[k][benchmarkRunIndex][pct] = error;
+                    }
+                });
+            }
         });
 
         // Determine run winner among enabled algorithms
@@ -1677,6 +1754,21 @@ function benchmarkAnimatedStep() {
             finishBenchmark(false);
         }
     } else {
+        // --- CEC: Record checkpoint errors mid-run ---
+        enabledKeys.forEach(k => {
+            const inst = k === 'ag' ? gaInstance : k === 'pso' ? psoInstance : edInstance;
+            if (inst) {
+                if (!benchmarkCheckpoints[k][benchmarkRunIndex]) {
+                    benchmarkCheckpoints[k][benchmarkRunIndex] = {};
+                }
+                CEC_CHECKPOINT_PCTS.forEach(pct => {
+                    if (feRatio >= pct && benchmarkCheckpoints[k][benchmarkRunIndex][pct] === undefined) {
+                        benchmarkCheckpoints[k][benchmarkRunIndex][pct] = Math.abs(inst.bestScore - benchmarkGlobalMin);
+                    }
+                });
+            }
+        });
+
         // Schedule next iteration
         const delay = parseInt(document.getElementById('sim_delay')?.value) || 0;
         if (delay > 0) {
@@ -1719,8 +1811,89 @@ function finishBenchmark(cancelled) {
     if (statusEl) statusEl.style.display = 'none';
 
     if (!cancelled && benchmarkResults && benchmarkRunIndex > 0) {
+        // --- CEC: Compute Wilcoxon signed-rank test between all pairs ---
+        const enabledKeys = getEnabledKeys();
+        if (enabledKeys.length >= 2 && benchmarkErrorResults) {
+            benchmarkWilcoxon = {};
+            for (let i = 0; i < enabledKeys.length; i++) {
+                for (let j = i + 1; j < enabledKeys.length; j++) {
+                    const a = enabledKeys[i], b = enabledKeys[j];
+                    const pairKey = `${a}_vs_${b}`;
+                    benchmarkWilcoxon[pairKey] = wilcoxonSignedRankTest(
+                        benchmarkErrorResults[a], benchmarkErrorResults[b]
+                    );
+                }
+            }
+        }
         showBenchmarkResults(benchmarkResults, benchmarkWins, benchmarkRunIndex, benchmarkItersPerRun);
     }
+}
+
+// =============================================================================
+//  Wilcoxon Signed-Rank Test (inline, no dependencies)
+// =============================================================================
+function wilcoxonSignedRankTest(x, y) {
+    const n = Math.min(x.length, y.length);
+    if (n < 5) return { W: 0, Rplus: 0, Rminus: 0, p: 1, result: '=' };
+
+    // Step 1: Compute differences and remove zeros
+    const diffs = [];
+    for (let i = 0; i < n; i++) {
+        const d = x[i] - y[i];
+        if (Math.abs(d) > 1e-15) diffs.push(d);
+    }
+    const nr = diffs.length;
+    if (nr === 0) return { W: 0, Rplus: 0, Rminus: 0, p: 1, result: '=' };
+
+    // Step 2: Rank absolute differences
+    const absDiffs = diffs.map((d, i) => ({ idx: i, abs: Math.abs(d), sign: Math.sign(d) }));
+    absDiffs.sort((a, b) => a.abs - b.abs);
+
+    // Handle ties (average ranks)
+    const ranks = new Array(nr);
+    let i = 0;
+    while (i < nr) {
+        let j = i;
+        while (j < nr && Math.abs(absDiffs[j].abs - absDiffs[i].abs) < 1e-15) j++;
+        const avgRank = (i + 1 + j) / 2;
+        for (let k = i; k < j; k++) ranks[k] = avgRank;
+        i = j;
+    }
+
+    // Step 3: Sum positive and negative ranks
+    let Rplus = 0, Rminus = 0;
+    for (let k = 0; k < nr; k++) {
+        if (absDiffs[k].sign > 0) Rplus += ranks[k];
+        else Rminus += ranks[k];
+    }
+
+    const W = Math.min(Rplus, Rminus);
+
+    // Step 4: Compute p-value using normal approximation (for n >= 10)
+    const meanW = nr * (nr + 1) / 4;
+    const stdW = Math.sqrt(nr * (nr + 1) * (2 * nr + 1) / 24);
+    const z = stdW > 0 ? (W - meanW) / stdW : 0;
+    // Two-tailed p-value from normal approximation
+    const p = 2 * normalCDF(-Math.abs(z));
+
+    // Result: + means x is significantly better (lower error), - means y is better
+    let result = '=';
+    if (p < 0.05) {
+        result = Rplus < Rminus ? '+' : '−';
+    }
+
+    return { W, Rplus, Rminus, p, z, result };
+}
+
+// Standard normal CDF approximation (Abramowitz & Stegun)
+function normalCDF(x) {
+    const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+    const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+    const sign = x < 0 ? -1 : 1;
+    x = Math.abs(x) / Math.sqrt(2);
+    const t = 1.0 / (1.0 + p * x);
+    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+    return 0.5 * (1.0 + sign * y);
 }
 
 function computeStats(arr) {
@@ -1740,6 +1913,13 @@ function computeStats(arr) {
     return { mean, std, best, worst, median };
 }
 
+// Format number in CEC scientific notation
+function cecFormat(val) {
+    if (val === 0) return '0.00e+00';
+    if (!Number.isFinite(val)) return 'Inf';
+    return val.toExponential(2);
+}
+
 function showBenchmarkResults(results, wins, totalRuns, itersPerRun) {
     const t = translations[currentLang];
     const modal = document.getElementById('benchmarkModal');
@@ -1751,7 +1931,7 @@ function showBenchmarkResults(results, wins, totalRuns, itersPerRun) {
     const statsTitle = document.getElementById('statsTitle');
     const winsTitle = document.getElementById('winsTitle');
 
-    if (statsTitle) statsTitle.textContent = t.benchmark_stats || 'Statistics';
+    if (statsTitle) statsTitle.textContent = t.benchmark_stats || 'CEC Statistics';
     if (winsTitle) winsTitle.textContent = t.benchmark_wins || 'Wins per Algorithm';
 
     // Only show enabled algorithms
@@ -1760,12 +1940,19 @@ function showBenchmarkResults(results, wins, totalRuns, itersPerRun) {
     const algColors = { ag: '#0f766e', pso: '#d97706', ed: '#be123c' };
 
     // Title
-    titleEl.textContent = t.benchmark_result_title || 'Benchmark Results';
-    subtitleEl.textContent = `${totalRuns} ${t.benchmark_result_subtitle || 'runs completed'} \u2022 ${itersPerRun} ${t.benchmark_iters || 'iterations each'}`;
+    titleEl.textContent = t.benchmark_result_title || 'IEEE CEC Benchmark Results';
+    const maxFEsLabel = benchmarkMaxFEs ? ` • MaxFEs: ${benchmarkMaxFEs.toLocaleString()}` : '';
+    subtitleEl.textContent = `${totalRuns} ${t.benchmark_result_subtitle || 'runs'} • ${itersPerRun} ${t.benchmark_iters || 'iterations'}${maxFEsLabel}`;
 
-    // Compute stats for enabled algorithms only
+    // Compute fitness stats
     const statsMap = {};
     enabledKeys.forEach(k => { statsMap[k] = computeStats(results[k]); });
+
+    // Compute error stats
+    const errorStatsMap = {};
+    if (benchmarkErrorResults) {
+        enabledKeys.forEach(k => { errorStatsMap[k] = computeStats(benchmarkErrorResults[k]); });
+    }
 
     // Determine overall winner
     const mode = getOptimizationMode();
@@ -1773,7 +1960,6 @@ function showBenchmarkResults(results, wins, totalRuns, itersPerRun) {
         key: k, name: algNames[k], wins: wins[k], mean: statsMap[k].mean, color: algColors[k]
     }));
 
-    // Sort by wins, then by mean
     algorithms.sort((a, b) => {
         if (b.wins !== a.wins) return b.wins - a.wins;
         if (mode === 'max') return b.mean - a.mean;
@@ -1796,52 +1982,162 @@ function showBenchmarkResults(results, wins, totalRuns, itersPerRun) {
         bannerEl.style.background = `linear-gradient(135deg, ${winner.color}, ${winner.color}dd)`;
     }
 
-    // Stats table
+    // ═════════════════════════════════════════════════════════════════════
+    //  Build all tables in tableContainer
+    // ═════════════════════════════════════════════════════════════════════
+    let html = '';
+
+    // ── 1. CEC Error Table ──────────────────────────────────────────────
+    if (benchmarkErrorResults && Object.keys(errorStatsMap).length > 0) {
+        html += `<h4 class="cec-section-title">📊 ${t.cec_error_table || 'Error Table (CEC Format)'}</h4>`;
+        html += '<table class="stats-table cec-table"><thead><tr><th></th>';
+        enabledKeys.forEach(k => {
+            html += `<th style="color:${algColors[k]}">${algNames[k]}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+
+        const errorLabels = ['Mean', 'Std', 'Best', 'Worst', 'Median'];
+        const errorFields = ['mean', 'std', 'best', 'worst', 'median'];
+        errorFields.forEach((field, fi) => {
+            html += `<tr><td class="stat-label">${errorLabels[fi]}</td>`;
+            const vals = enabledKeys.map(k => errorStatsMap[k][field]);
+            const bestVal = field === 'std' ? Math.min(...vals) : Math.min(...vals);
+            enabledKeys.forEach(k => {
+                const v = errorStatsMap[k][field];
+                const isBest = Math.abs(v - bestVal) < 1e-15;
+                html += `<td class="${isBest ? 'stat-best' : ''}">${cecFormat(v)}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+    }
+
+    // ── 2. Success Rate ─────────────────────────────────────────────────
+    if (benchmarkSuccessCount) {
+        html += `<h4 class="cec-section-title">✅ ${t.cec_success_rate || 'Success Rate'} (ε < ${CEC_SUCCESS_THRESHOLD})</h4>`;
+        html += '<table class="stats-table cec-table"><thead><tr><th></th>';
+        enabledKeys.forEach(k => {
+            html += `<th style="color:${algColors[k]}">${algNames[k]}</th>`;
+        });
+        html += '</tr></thead><tbody><tr><td class="stat-label">Rate</td>';
+        enabledKeys.forEach(k => {
+            const rate = ((benchmarkSuccessCount[k] / totalRuns) * 100).toFixed(1);
+            html += `<td>${rate}% (${benchmarkSuccessCount[k]}/${totalRuns})</td>`;
+        });
+        html += '</tr></tbody></table>';
+    }
+
+    // ── 3. FE Checkpoint Convergence ────────────────────────────────────
+    if (benchmarkCheckpoints && enabledKeys.length > 0) {
+        html += `<h4 class="cec-section-title">📈 ${t.cec_checkpoints || 'Error at FE Checkpoints'}</h4>`;
+        html += '<table class="stats-table cec-table cec-checkpoint-table"><thead><tr><th>FEs %</th>';
+        enabledKeys.forEach(k => {
+            html += `<th style="color:${algColors[k]}">${algNames[k]}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+
+        // Show averaged errors across runs for each checkpoint
+        CEC_CHECKPOINT_PCTS.forEach(pct => {
+            const feCount = Math.round(pct * benchmarkMaxFEs);
+            html += `<tr><td class="stat-label">${(pct * 100).toFixed(0)}% (${feCount.toLocaleString()})</td>`;
+            enabledKeys.forEach(k => {
+                // Average errors across runs for this checkpoint
+                let sum = 0, count = 0;
+                benchmarkCheckpoints[k].forEach(runData => {
+                    if (runData && runData[pct] !== undefined) {
+                        sum += runData[pct];
+                        count++;
+                    }
+                });
+                const avg = count > 0 ? sum / count : NaN;
+                html += `<td>${Number.isFinite(avg) ? cecFormat(avg) : 'N/A'}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+    }
+
+    // ── 4. Wilcoxon Signed-Rank Test ────────────────────────────────────
+    if (benchmarkWilcoxon && enabledKeys.length >= 2) {
+        html += `<h4 class="cec-section-title">🧪 ${t.cec_wilcoxon || 'Wilcoxon Signed-Rank Test'} (α = 0.05)</h4>`;
+        html += '<table class="stats-table cec-table"><thead><tr>';
+        html += `<th>${t.cec_pair || 'Pair'}</th><th>R+</th><th>R−</th><th>p-value</th><th>${t.cec_significance || 'Sig.'}</th>`;
+        html += '</tr></thead><tbody>';
+
+        for (const pairKey of Object.keys(benchmarkWilcoxon)) {
+            const w = benchmarkWilcoxon[pairKey];
+            const [a, , b] = pairKey.split('_');
+            const sigClass = w.result === '+' ? 'wilcoxon-plus' : w.result === '−' ? 'wilcoxon-minus' : 'wilcoxon-equal';
+            const sigLabel = w.result === '+' ? `${algNames[a]}+` : w.result === '−' ? `${algNames[b]}+` : '=';
+            html += `<tr>`;
+            html += `<td class="stat-label">${algNames[a]} vs ${algNames[b]}</td>`;
+            html += `<td>${w.Rplus.toFixed(1)}</td>`;
+            html += `<td>${w.Rminus.toFixed(1)}</td>`;
+            html += `<td>${w.p < 0.001 ? '<0.001' : w.p.toFixed(4)}</td>`;
+            html += `<td class="${sigClass}">${sigLabel}</td>`;
+            html += `</tr>`;
+        }
+        html += '</tbody></table>';
+    }
+
+    // ── 5. Fitness Stats (traditional) ──────────────────────────────────
+    html += `<h4 class="cec-section-title">📋 ${t.benchmark_stats || 'Fitness Statistics'}</h4>`;
+    html += '<table class="stats-table"><thead><tr><th></th>';
+    enabledKeys.forEach(k => {
+        html += `<th style="color:${algColors[k]}">${algNames[k]}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
     const statLabels = {
-        mean: t.stat_mean || 'Mean',
-        std: t.stat_std || 'Std Dev',
-        best: t.stat_best || 'Best',
-        worst: t.stat_worst || 'Worst',
-        median: t.stat_median || 'Median',
-        wins: t.stat_wins || 'Wins'
+        mean: t.stat_mean || 'Mean', std: t.stat_std || 'Std Dev',
+        best: t.stat_best || 'Best', worst: t.stat_worst || 'Worst',
+        median: t.stat_median || 'Median', wins: t.stat_wins || 'Wins'
     };
 
-    let tableHTML = '<table class="stats-table"><thead><tr><th></th>';
-    enabledKeys.forEach(k => {
-        tableHTML += `<th style="color:${algColors[k]}">${algNames[k]}</th>`;
-    });
-    tableHTML += '</tr></thead><tbody>';
-
     ['mean', 'std', 'best', 'worst', 'median'].forEach(stat => {
-        tableHTML += `<tr><td class="stat-label">${statLabels[stat]}</td>`;
+        html += `<tr><td class="stat-label">${statLabels[stat]}</td>`;
         const vals = enabledKeys.map(k => statsMap[k][stat]);
         let bestVal;
         if (stat === 'std') {
             bestVal = Math.min(...vals);
-        } else if (stat === 'worst') {
-            bestVal = mode === 'max' ? Math.max(...vals) : Math.min(...vals);
         } else {
             bestVal = mode === 'max' ? Math.max(...vals) : Math.min(...vals);
         }
-
         enabledKeys.forEach(k => {
             const v = statsMap[k][stat];
             const isBest = v === bestVal;
-            tableHTML += `<td class="${isBest ? 'stat-best' : ''}">${v.toFixed(6)}</td>`;
+            html += `<td class="${isBest ? 'stat-best' : ''}">${v.toFixed(6)}</td>`;
         });
-        tableHTML += '</tr>';
+        html += '</tr>';
     });
 
     // Wins row
-    tableHTML += `<tr class="wins-row"><td class="stat-label">${statLabels.wins}</td>`;
+    html += `<tr class="wins-row"><td class="stat-label">${statLabels.wins}</td>`;
     const maxWins = Math.max(...enabledKeys.map(k => wins[k]));
     enabledKeys.forEach(k => {
         const w = wins[k];
         const isBest = w === maxWins && w > 0;
-        tableHTML += `<td class="${isBest ? 'stat-best' : ''}">${w}</td>`;
+        html += `<td class="${isBest ? 'stat-best' : ''}">${w}</td>`;
     });
-    tableHTML += '</tr></tbody></table>';
-    tableContainer.innerHTML = tableHTML;
+    html += '</tr></tbody></table>';
+
+    // ── 6. Ranking ──────────────────────────────────────────────────────
+    if (benchmarkErrorResults && enabledKeys.length >= 2) {
+        html += `<h4 class="cec-section-title">🏅 ${t.cec_ranking || 'Final Ranking'}</h4>`;
+        const ranked = enabledKeys.map(k => ({
+            key: k, name: algNames[k], meanError: errorStatsMap[k]?.mean || 0, color: algColors[k]
+        })).sort((a, b) => a.meanError - b.meanError);
+
+        html += '<table class="stats-table cec-table"><thead><tr>';
+        html += `<th>#</th><th>${t.cec_algorithm || 'Algorithm'}</th><th>Mean Error</th>`;
+        html += '</tr></thead><tbody>';
+        ranked.forEach((r, idx) => {
+            html += `<tr><td>${idx + 1}</td><td style="color:${r.color};font-weight:bold">${r.name}</td><td>${cecFormat(r.meanError)}</td></tr>`;
+        });
+        html += '</tbody></table>';
+    }
+
+    tableContainer.innerHTML = html;
 
     // Wins chart (horizontal bars)
     let barsHTML = '';
