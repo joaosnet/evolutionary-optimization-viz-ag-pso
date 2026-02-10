@@ -758,10 +758,10 @@ const REPORT_SECTIONS = [
                 else if (data.enabled.ag || data.enabled.pso) edSub = '2.2';
                 layout.addSubsectionHeading(`${edSub} Evolução Diferencial (ED)`);
                 layout.addText('A Evolução Diferencial (ED), proposta por Storn e Price (1997), é um algoritmo de otimização estocástica para espaços contínuos. A implementação utiliza a estratégia DE/rand/1/bin, que opera em três fases:');
-                layout.addBullet('Mutação: gera um vetor doador v = x_a + F·(x_b - x_c), onde a, b, c são índices aleatórios distintos e F é o fator de escala (differential weight).');
-                layout.addBullet('Crossover binomial: cada dimensão do vetor trial é herdada do doador com probabilidade CR, com garantia de pelo menos uma dimensão via índice jRand aleatório.');
-                layout.addBullet('Seleção greedy: o trial substitui o indivíduo atual apenas se for melhor ou igual, garantindo convergência monotônica.');
-                layout.addText('A ED possui apenas dois hiperparâmetros além do tamanho da população: F (fator de escala, tipicamente 0.4-1.0) e CR (taxa de crossover, tipicamente 0.1-1.0), o que simplifica significativamente o ajuste em comparação com outros métodos.');
+                layout.addBullet('Mutacao: gera um vetor doador v = xa + F*(xb - xc), onde a, b, c sao indices aleatorios distintos e F e o fator de escala (differential weight).');
+                layout.addBullet('Crossover binomial: cada dimensao do vetor trial e herdada do doador com probabilidade CR, com garantia de pelo menos uma dimensao via indice jRand aleatorio.');
+                layout.addBullet('Selecao greedy: o trial substitui o individuo atual apenas se for melhor ou igual, garantindo convergencia monotonica.');
+                layout.addText('A ED possui apenas dois hiperparametros alem do tamanho da populacao: F (fator de escala, tipicamente 0.4-1.0) e CR (taxa de crossover, tipicamente 0.1-1.0), o que simplifica significativamente o ajuste em comparacao com outros metodos.');
             }
         }
     },
@@ -774,14 +774,14 @@ const REPORT_SECTIONS = [
             const { layout, data } = ctx;
             const keys = data.enabledKeys;
 
-            layout.addSectionHeading('3. Configuração Experimental');
+            layout.addSectionHeading('3. Configuracao Experimental');
 
-            // Cabeçalho dinâmico
-            const head = ['Parâmetro', ...keys.map(k => ALG_NAMES[k].shortPT)];
-            const body = [['População', ...keys.map(() => data.params.pop_size)]];
+            // Cabecalho dinamico
+            const head = ['Parametro', ...keys.map(k => ALG_NAMES[k].shortPT)];
+            const body = [['Populacao', ...keys.map(() => data.params.pop_size)]];
 
             if (data.enabled.ag) {
-                const rowMut = ['Mutação'];
+                const rowMut = ['Mutacao'];
                 keys.forEach(k => rowMut.push(k === 'ag' ? data.params.ag_mutation : '--'));
                 body.push(rowMut);
 
@@ -795,7 +795,7 @@ const REPORT_SECTIONS = [
             }
 
             if (data.enabled.pso) {
-                ['Inércia (w)', 'Cognitivo (c1)', 'Social (c2)'].forEach((label, idx) => {
+                ['Inercia (w)', 'Cognitivo (c1)', 'Social (c2)'].forEach((label, idx) => {
                     const vals = [data.params.pso_w, data.params.pso_c1, data.params.pso_c2];
                     const row = [label];
                     keys.forEach(k => row.push(k === 'pso' ? vals[idx] : '--'));
@@ -809,7 +809,13 @@ const REPORT_SECTIONS = [
                 body.push(row);
             }
 
-            layout.addTable(head, body);
+            // Remove rows where all data cells are '--' (empty columns)
+            const filteredBody = body.filter(row => {
+                const dataCells = row.slice(1);
+                return !dataCells.every(cell => cell === '--');
+            });
+
+            layout.addTable(head, filteredBody);
         }
     },
 
@@ -905,12 +911,12 @@ const REPORT_SECTIONS = [
                 ? `O benchmark seguiu os critérios do IEEE CEC (Congress on Evolutionary Computation). Foram executadas ${b.totalRuns} execuções independentes do ${ALG_NAMES[keys[0]].shortPT}.`
                 : `O benchmark seguiu os critérios do IEEE CEC (Congress on Evolutionary Computation). Foram executadas ${b.totalRuns} execuções independentes de cada algoritmo.`;
             layout.addText(protocolIntro);
-            layout.addBullet(`MaxFEs: ${b.maxFEs ? b.maxFEs.toLocaleString() : '20.000'} (10.000 × D)`);
-            layout.addBullet(`Iterações por execução: ${b.itersPerRun}`);
-            layout.addBullet(`Ótimo global (f*): ${b.globalMin || 0}`);
-            layout.addBullet(`Erro: ε = |f(x*) − f*|`);
-            layout.addBullet(`Limiar de sucesso: ε < ${b.successThreshold || 1e-8}`);
-            layout.addText('Referência: Awad, N. H., et al. "Problem Definitions and Evaluation Criteria for the CEC 2017 Special Session." NTU Tech Report, 2016.');
+            layout.addBullet(`MaxFEs: ${b.maxFEs ? b.maxFEs.toLocaleString() : '20.000'} (10.000 x D)`);
+            layout.addBullet(`Iteracoes por execucao: ${b.itersPerRun}`);
+            layout.addBullet(`Otimo global (f*): ${b.globalMin || 0}`);
+            layout.addBullet(`Erro: e = |f(x*) - f*|`);
+            layout.addBullet(`Limiar de sucesso: e < ${b.successThreshold || 1e-8}`);
+            layout.addText('Referencia: Awad, N. H., et al. "Problem Definitions and Evaluation Criteria for the CEC 2017 Special Session." NTU Tech Report, 2016.');
 
             // 5.2 Tabela de Erro CEC
             subSec++;
@@ -941,7 +947,7 @@ const REPORT_SECTIONS = [
                         `${((b.successRate[k] || 0) / b.totalRuns * 100).toFixed(1)}%`
                     ])
                 );
-                layout.addText(`Sucesso definido como erro ε < ${b.successThreshold || 1e-8}.`);
+                layout.addText(`Sucesso definido como erro e < ${b.successThreshold || 1e-8}.`);
             }
 
             // 5.4 Erro nos Checkpoints FEs
@@ -988,7 +994,7 @@ const REPORT_SECTIONS = [
                         sigLabel
                     ]);
                 }
-                layout.addTable(['Par', 'R+', 'R−', 'p-value', 'Sig.'], wilcoxonRows, { fontSize: 8 });
+                layout.addTable(['Par', 'R+', 'R-', 'p-value', 'Sig.'], wilcoxonRows, { fontSize: 8 });
                 layout.addText('Referência: Wilcoxon, F. "Individual Comparisons by Ranking Methods." Biometrics Bulletin, 1945.');
             }
 

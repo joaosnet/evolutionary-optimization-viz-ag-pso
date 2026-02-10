@@ -1,7 +1,0 @@
-[project]
-name = "evolutionary-optimization-viz"
-version = "1.0.0"
-description = "Interactive client-side visualization comparing AG, PSO and Differential Evolution (ED) on benchmark functions"
-readme = "README.md"
-requires-python = ">=3.10"
-dependencies = []

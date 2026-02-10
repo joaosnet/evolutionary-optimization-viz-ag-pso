@@ -13,11 +13,8 @@
 
 > Interactive client-side visualization comparing **Genetic Algorithm (AG)**, **Particle Swarm Optimization (PSO)** and **Differential Evolution (ED)** on benchmark functions.
 >
-> **Live Demo:** [https://joaosnet.github.io/evolutionary-optimization-viz/](https://joaosnet.github.io/evolutionary-optimization-viz/)
+> **Live Demo:** [https://joaosnet.github.io/evolutionary-optimization-viz-ag-pso/](https://joaosnet.github.io/evolutionary-optimization-viz-ag-pso/)
 
-### 📸 Screenshots
-
-![Simulation](screenshot-simulation.png)
 
 ### 🚀 Getting Started
 
@@ -25,8 +22,8 @@ This project runs entirely in the browser — no backend required!
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/joaosnet/evolutionary-optimization-viz.git
-    cd evolutionary-optimization-viz
+    git clone https://github.com/joaosnet/evolutionary-optimization-viz-ag-pso.git
+    cd evolutionary-optimization-viz-ag-pso
     ```
 
 2.  **Serve locally** (any static file server):
@@ -67,11 +64,8 @@ This project runs entirely in the browser — no backend required!
 
 > Visualização interativa no navegador comparando **Algoritmo Genético (AG)**, **Otimização por Enxame de Partículas (PSO)** e **Evolução Diferencial (ED)** em funções benchmark.
 >
-> **Demonstração Online:** [https://joaosnet.github.io/evolutionary-optimization-viz/](https://joaosnet.github.io/evolutionary-optimization-viz/)
+> **Demonstração Online:** [https://joaosnet.github.io/evolutionary-optimization-viz-ag-pso/](https://joaosnet.github.io/evolutionary-optimization-viz-ag-pso/)
 
-### 📸 Screenshots
-
-![Simulação](screenshot-simulation.png)
 
 ### 🚀 Instalação e Execução
 
@@ -79,8 +73,8 @@ Este projeto roda inteiramente no navegador — sem backend necessário!
 
 1.  **Clone o repositório:**
     ```bash
-    git clone https://github.com/joaosnet/evolutionary-optimization-viz.git
-    cd evolutionary-optimization-viz
+    git clone https://github.com/joaosnet/evolutionary-optimization-viz-ag-pso.git
+    cd evolutionary-optimization-viz-ag-pso
     ```
 
 2.  **Sirva localmente** (qualquer servidor de arquivos estáticos):
