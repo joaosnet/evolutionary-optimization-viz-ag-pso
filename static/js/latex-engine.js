@@ -32,13 +32,6 @@ export async function compileLatexToPdf(latexSource, images = {}, onStatus) {
 
     if (onStatus) onStatus('Escrevendo arquivos...');
 
-    // Load and write the format file to MemFS
-    if (onStatus) onStatus('Carregando formato LaTeX...');
-    const fmtResp = await fetch('static/js/latex/swiftlatexpdftex.fmt');
-    if (!fmtResp.ok) throw new Error('Falha ao carregar arquivo de formato LaTeX');
-    const fmtData = new Uint8Array(await fmtResp.arrayBuffer());
-    engine.writeMemFSFile("swiftlatexpdftex.fmt", fmtData);
-
     // Write main.tex
     engine.writeMemFSFile("main.tex", latexSource);
 
