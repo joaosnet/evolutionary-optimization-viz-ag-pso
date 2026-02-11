@@ -15,9 +15,9 @@
         // Workaround: ensure multiple getImageData readbacks are fast by creating
         // 2D canvas contexts with { willReadFrequently: true } when not provided.
         // See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently
-        (function () {
+        (function() {
             const _origGetContext = HTMLCanvasElement.prototype.getContext;
-            HTMLCanvasElement.prototype.getContext = function (type, options) {
+            HTMLCanvasElement.prototype.getContext = function(type, options) {
                 if (type === '2d') {
                     if (!options || typeof options === 'boolean') options = {};
                     if (options.willReadFrequently === undefined) {
@@ -311,8 +311,7 @@
                         <span class="algo-toggle-slider"></span>
                     </label>
                     <h2 data-i18n="ag_title">Genetic Algorithm</h2>
-                    <span class="badge ag-badge" onclick="toggleFocus('ag')" role="button" tabindex="0"
-                        title="Focus AG">AG</span>
+                    <span class="badge ag-badge" onclick="toggleFocus('ag')" role="button" tabindex="0" title="Focus AG">AG</span>
                 </div>
                 <div class="plot-controls" aria-label="AG plot controls">
                     <label>
@@ -352,8 +351,7 @@
                         <span class="algo-toggle-slider"></span>
                     </label>
                     <h2 data-i18n="pso_title">Particle Swarm</h2>
-                    <span class="badge pso-badge" onclick="toggleFocus('pso')" role="button" tabindex="0"
-                        title="Focus PSO">PSO</span>
+                    <span class="badge pso-badge" onclick="toggleFocus('pso')" role="button" tabindex="0" title="Focus PSO">PSO</span>
                 </div>
                 <div class="plot-controls" aria-label="PSO plot controls">
                     <label>
@@ -393,8 +391,7 @@
                         <span class="algo-toggle-slider"></span>
                     </label>
                     <h2 data-i18n="ed_title">Differential Evolution</h2>
-                    <span class="badge ed-badge" onclick="toggleFocus('ed')" role="button" tabindex="0"
-                        title="Focus ED">ED</span>
+                    <span class="badge ed-badge" onclick="toggleFocus('ed')" role="button" tabindex="0" title="Focus ED">ED</span>
                 </div>
                 <div class="plot-controls" aria-label="ED plot controls">
                     <label>
@@ -459,13 +456,15 @@
     <script src="https://cdn.jsdelivr.net/npm/mathjs@11.11.0/lib/browser/math.min.js"></script>
     <!-- MathLive for equation input -->
     <script src="https://cdn.jsdelivr.net/npm/mathlive@0.100.0/dist/mathlive.min.js"></script>
+    <!-- jsPDF for client-side PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Algorithm implementations -->
     <script src="./static/js/algorithms/base.js"></script>
     <script src="./static/js/algorithms/ga.js"></script>
     <script src="./static/js/algorithms/pso.js"></script>
     <script src="./static/js/algorithms/ed.js"></script>
     <script src="./static/js/benchmarks.js"></script>
-    <script src="./static/js/latex/PdfTeXEngine.js"></script>
     <script src="./static/js/report.js"></script>
     <!-- Main application -->
     <script src="./static/js/main.js"></script>
