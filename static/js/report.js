@@ -69,7 +69,7 @@ const REPORT_AI_PROMPTS = [
     'o teclado virtual deveria ser completo o que vem padrao do mathjs',
     'A funcao padrao que deve vir no teclado é a da imagem',
     'não está dando para resetar',
-    'Ainda não é possivel resetar ao estado inicial, de poder voltar a qualquer iteracao',
+    'Ainda não é possivel resetar ao estado inicial, de poder voltar a qualquer geração',
     'syntax error in part "*(x1^2+x2^2))^2)" (char 44',
     'Implementar o ED para f6 de 10 variáveis',
     'Remover backend Python e tornar client-only para GitHub Pages',
@@ -99,11 +99,11 @@ const ED_DEVELOPMENT_HISTORY = [
     },
     {
         phase: 'Testes Automatizados',
-        description: 'Foram criados 10 testes unitários específicos para ED com Jest: inicialização correta, arrays de fitness, incremento de iteração, melhoria do bestScore em minimização, limites da população, registro de histórico, snapshot com campos específicos (fitness, objectiveFitness), restauração de estado, seleção de índices distintos, e convergência na função esfera.'
+        description: 'Foram criados 10 testes unitários específicos para ED com Jest: inicialização correta, arrays de fitness, incremento de geração, melhoria do bestScore em minimização, limites da população, registro de histórico, snapshot com campos específicos (fitness, objectiveFitness), restauração de estado, seleção de índices distintos, e convergência na função esfera.'
     },
     {
         phase: 'Integração ao Dashboard',
-        description: 'O card do ED foi adicionado ao grid de 3 colunas com cor temática rosa (#be123c). Inclui controles interativos para F e CR, plot 3D independente, e integração completa com o gráfico de convergência, benchmark multi-run e sistema de navegação de iterações.'
+        description: 'O card do ED foi adicionado ao grid de 3 colunas com cor temática rosa (#be123c). Inclui controles interativos para F e CR, plot 3D independente, e integração completa com o gráfico de convergência, benchmark multi-run e sistema de navegação de gerações.'
     },
     {
         phase: 'Remoção do Backend Python',
@@ -111,7 +111,7 @@ const ED_DEVELOPMENT_HISTORY = [
     },
     {
         phase: 'Benchmark Multi-Run',
-        description: 'O sistema de benchmark com animação em tempo real foi implementado, permitindo N execuções consecutivas de todos os algoritmos habilitados. O ED participa das rodadas com seu próprio registro de estatísticas (média, desvio padrão, melhor, pior, mediana, vitórias).'
+        description: 'O sistema de benchmark com animação em tempo real foi implementado, permitindo N experimentos consecutivos de todos os algoritmos habilitados. O ED participa das rodadas com seu próprio registro de estatísticas (média, desvio padrão, melhor, pior, mediana, vitórias).'
     },
     {
         phase: 'Seleção Dinâmica de Algoritmos',
@@ -508,8 +508,8 @@ async function captureBenchmarkRunCharts(benchmarkData, enabledKeys, maxRuns = 6
                 width: 1000,
                 height: 480,
                 margin: { l: 60, r: 20, t: 36, b: 50 },
-                title: { text: `Benchmark - Execução ${runIdx + 1}`, font: { size: 12 } },
-                xaxis: { title: 'Iteração' },
+                title: { text: `Benchmark - Experimento ${runIdx + 1}`, font: { size: 12 } },
+                xaxis: { title: 'Geração' },
                 yaxis: { title: 'Fitness' },
                 paper_bgcolor: '#ffffff',
                 plot_bgcolor: '#ffffff',
@@ -764,11 +764,11 @@ const REPORT_SECTIONS = [
             const winner = determineWinner(data);
 
             const isSingle = keys.length === 1;
-            const benchmarkNote = data.benchmark ? ` Adicionalmente, um benchmark estatístico com ${data.benchmark.totalRuns} execuções independentes foi realizado para validar a robustez dos resultados.` : '';
+            const benchmarkNote = data.benchmark ? ` Adicionalmente, um benchmark estatístico com ${data.benchmark.totalRuns} experimentos independentes foi realizado para validar a robustez dos resultados.` : ''; 
             const introText = isSingle
                 ? `Este trabalho apresenta uma avaliação do ${enabledFullPT(keys)} aplicado à otimização de funções multimodais.`
                 : `Este trabalho apresenta uma análise comparativa entre ${enabledFullPT(keys)} aplicados à otimização de funções multimodais.`;
-            const absText = `${introText} A simulação foi executada com ${maxIter} iterações, utilizando uma população de ${data.params.pop_size} indivíduos/partículas.${benchmarkNote} Os resultados demonstram que ${winner.pt}. O projeto foi desenvolvido com assistência de Inteligência Artificial (IA).`;
+            const absText = `${introText} A simulação foi executada com ${maxIter} gerações, utilizando uma população de ${data.params.pop_size} indivíduos/partículas.${benchmarkNote} Os resultados demonstram que ${winner.pt}. O projeto foi desenvolvido com assistência de Inteligência Artificial (IA).`; 
 
             doc.setFont(layout.cfg.font, 'bold');
             doc.setFontSize(12);
@@ -970,13 +970,13 @@ const REPORT_SECTIONS = [
                 ['Métrica', ...keys.map(k => ALG_NAMES[k].shortPT)],
                 [
                     ['Melhor Fitness', ...keys.map(k => data.scores[k]?.best_score?.toFixed(6) || 'N/A')],
-                    ['Iterações', ...keys.map(k => data.scores[k]?.iteration ?? 'N/A')]
+                    ['Gerações', ...keys.map(k => data.scores[k]?.iteration ?? 'N/A')]
                 ]
             );
 
             // 4.2 Convergência
             layout.addSubsectionHeading('4.2 Convergência');
-            if (images.convergence) layout.addImage(images.convergence, 'Curva de Convergência (Fitness vs Iteração)', 45);
+            if (images.convergence) layout.addImage(images.convergence, 'Curva de Convergência (Fitness vs Geração)', 45);
 
             // Tabela de convergência amostrada
             const total = Math.max(...keys.map(k => data.history[k].length), 0);
@@ -998,7 +998,7 @@ const REPORT_SECTIONS = [
 
             if (convRows.length > 0) {
                 layout.addTable(
-                    ['Iteração', ...keys.map(k => ALG_NAMES[k].shortPT)],
+                    ['Geração', ...keys.map(k => ALG_NAMES[k].shortPT)],
                     convRows,
                     { fontSize: 8, cellPadding: 1.5 }
                 );
@@ -1029,11 +1029,11 @@ const REPORT_SECTIONS = [
             let subSec = 1;
             layout.addSubsectionHeading(`5.${subSec} Protocolo CEC`);
             const protocolIntro = isSingle
-                ? `O benchmark seguiu os critérios do IEEE CEC (Congress on Evolutionary Computation). Foram executadas ${b.totalRuns} execuções independentes do ${ALG_NAMES[keys[0]].shortPT}.`
-                : `O benchmark seguiu os critérios do IEEE CEC (Congress on Evolutionary Computation). Foram executadas ${b.totalRuns} execuções independentes de cada algoritmo.`;
+                ? `O benchmark seguiu os critérios do IEEE CEC (Congress on Evolutionary Computation). Foram executados ${b.totalRuns} experimentos independentes do ${ALG_NAMES[keys[0]].shortPT}.`
+                : `O benchmark seguiu os critérios do IEEE CEC (Congress on Evolutionary Computation). Foram executados ${b.totalRuns} experimentos independentes de cada algoritmo.`;
             layout.addText(protocolIntro);
             layout.addBullet(`MaxFEs: ${b.maxFEs ? b.maxFEs.toLocaleString() : '20.000'} (10.000 x D)`);
-            layout.addBullet(`Iteracoes por execucao: ${b.itersPerRun}`);
+            layout.addBullet(`Gerações por experimento: ${b.itersPerRun}`);
             layout.addBullet(`Otimo global (f*): ${b.globalMin || 0}`);
             layout.addBullet(`Erro: e = |f(x*) - f*|`);
             layout.addBullet(`Limiar de sucesso: e < ${b.successThreshold || 1e-8}`);
@@ -1094,23 +1094,23 @@ const REPORT_SECTIONS = [
                     cpRows,
                     { fontSize: 7, cellPadding: 1 }
                 );
-                layout.addText('Tabela mostra a média do erro nas execuções independentes em cada checkpoint de FEs.');
+                layout.addText('Tabela mostra a média do erro nos experimentos independentes em cada checkpoint de FEs.');
             }
 
-            // 5.X Gráficos por execução (iteração a iteração)
+            // 5.X Gráficos por experimento (geração a geração)
             subSec++;
             if (images && images.benchmarkRuns && images.benchmarkRuns.length > 0) {
-                layout.addSubsectionHeading(`5.${subSec} Convergência por Execução (Geração)`);
+                layout.addSubsectionHeading(`5.${subSec} Convergência por Experimento (Geração)`);
                 const fmtFixed = (v) => Number.isFinite(v) ? v.toFixed(6) : 'N/A';
 
                 const shownRuns = images.benchmarkRunsMeta?.shown || images.benchmarkRuns.length;
                 const totalRuns = images.benchmarkRunsMeta?.total || shownRuns;
                 if (totalRuns > shownRuns) {
-                    layout.addText(`Para evitar relatórios muito longos, esta seção mostra ${shownRuns} execuções representativas de um total de ${totalRuns}. As métricas agregadas consideram todas as execuções.`);
+                    layout.addText(`Para evitar relatórios muito longos, esta seção mostra ${shownRuns} experimentos representativos de um total de ${totalRuns}. As métricas agregadas consideram todos os experimentos.`);
                 }
 
                 images.benchmarkRuns.forEach(runData => {
-                    layout.addImage(runData.image, `Benchmark - Execução ${runData.run} (Fitness vs Iteração)`, 42);
+                    layout.addImage(runData.image, `Benchmark - Experimento ${runData.run} (Fitness vs Geração)`, 42);
 
                     if (runData.metrics) {
                         const runHead = ['Métrica', ...keys.map(k => ALG_NAMES[k].shortPT)];
@@ -1119,7 +1119,7 @@ const REPORT_SECTIONS = [
                             const err = runData.metrics.errors?.[k];
                             return Number.isFinite(err) ? err.toExponential(2) : 'N/A';
                         })];
-                        const iterRow = ['Iterações', ...keys.map(() => runData.metrics.iterations ?? 'N/A')];
+                        const iterRow = ['Gerações', ...keys.map(() => runData.metrics.iterations ?? 'N/A')];
                         const feRow = ['FEs', ...keys.map(() => runData.metrics.fes ?? 'N/A')];
                         layout.addTable(runHead, [finalFitnessRow, finalErrorRow, iterRow, feRow], { fontSize: 8, cellPadding: 1.2 });
                     }
@@ -1161,7 +1161,7 @@ const REPORT_SECTIONS = [
                 if (b.isTie) {
                     layout.addText('O benchmark resultou em empate técnico entre os algoritmos.');
                 } else {
-                    layout.addText(`O vencedor do benchmark foi o ${ALG_NAMES[b.winner.key].shortPT} com ${b.winner.wins} vitórias em ${b.totalRuns} execuções (${Math.round((b.winner.wins / b.totalRuns) * 100)}%).`);
+                    layout.addText(`O vencedor do benchmark foi o ${ALG_NAMES[b.winner.key].shortPT} com ${b.winner.wins} vitórias em ${b.totalRuns} experimentos (${Math.round((b.winner.wins / b.totalRuns) * 100)}%).`);
                 }
             }
 
@@ -1205,7 +1205,7 @@ const REPORT_SECTIONS = [
 
             layout.addSubsectionHeading(`${secNum}.1 Arquitetura`);
             layout.addBullet('Classe base OptimizationAlgorithm com interface unificada para AG, PSO e ED.');
-            layout.addBullet('Sistema de snapshot/restore para navegação de iterações.');
+            layout.addBullet('Sistema de snapshot/restore para navegação de gerações.');
             layout.addBullet('Detecção automática de convergência configurável.');
             layout.addBullet('Benchmark multi-run com animação em tempo real.');
             layout.addBullet('Seleção dinâmica de algoritmos (toggle on/off).');
@@ -1268,9 +1268,9 @@ const REPORT_SECTIONS = [
                 layout.addSubsectionHeading(`${secNum}.${sub + 1} Análise do Benchmark`);
                 const b = data.benchmark;
                 if (isSingleBench) {
-                    layout.addText(`O benchmark com ${b.totalRuns} execuções independentes permite uma avaliação estatisticamente robusta da consistência do ${ALG_NAMES[bKeys[0]].shortPT}. A variabilidade observada (desvio padrão e coeficiente de variação) revela a sensibilidade do algoritmo às condições iniciais aleatórias.`);
+                    layout.addText(`O benchmark com ${b.totalRuns} experimentos independentes permite uma avaliação estatisticamente robusta da consistência do ${ALG_NAMES[bKeys[0]].shortPT}. A variabilidade observada (desvio padrão e coeficiente de variação) revela a sensibilidade do algoritmo às condições iniciais aleatórias.`);
                 } else {
-                    layout.addText(`O benchmark com ${b.totalRuns} execuções independentes permite uma avaliação estatisticamente mais robusta do que uma única simulação. A variabilidade observada (desvio padrão e coeficiente de variação) revela a sensibilidade de cada algoritmo às condições iniciais aleatórias.`);
+                    layout.addText(`O benchmark com ${b.totalRuns} experimentos independentes permite uma avaliação estatisticamente mais robusta do que uma única simulação. A variabilidade observada (desvio padrão e coeficiente de variação) revela a sensibilidade de cada algoritmo às condições iniciais aleatórias.`);
                     if (!b.isTie) {
                         layout.addText(`O ${ALG_NAMES[b.winner.key].shortPT} apresentou superioridade estatística com ${b.winner.wins} vitórias (${Math.round((b.winner.wins / b.totalRuns) * 100)}%), sugerindo que é a melhor escolha para este tipo de função objetivo e configuração de parâmetros.`);
                     } else {
@@ -1328,11 +1328,11 @@ const REPORT_SECTIONS = [
             if (data.benchmark) {
                 const b = data.benchmark;
                 if (keys.length === 1) {
-                    layout.addBullet(`O benchmark estatístico com ${b.totalRuns} execuções confirmou a consistência do ${ALG_NAMES[keys[0]].shortPT}, com desvio padrão de ${b.stats[keys[0]].std.toFixed(6)}.`);
+                    layout.addBullet(`O benchmark estatístico com ${b.totalRuns} experimentos confirmou a consistência do ${ALG_NAMES[keys[0]].shortPT}, com desvio padrão de ${b.stats[keys[0]].std.toFixed(6)}.`);
                 } else if (!b.isTie) {
-                    layout.addBullet(`O benchmark estatístico com ${b.totalRuns} execuções confirmou a superioridade do ${ALG_NAMES[b.winner.key].shortPT} para a configuração testada.`);
+                    layout.addBullet(`O benchmark estatístico com ${b.totalRuns} experimentos confirmou a superioridade do ${ALG_NAMES[b.winner.key].shortPT} para a configuração testada.`);
                 } else {
-                    layout.addBullet(`O benchmark com ${b.totalRuns} execuções resultou em empate técnico, indicando desempenho comparável entre os algoritmos testados.`);
+                    layout.addBullet(`O benchmark com ${b.totalRuns} experimentos resultou em empate técnico, indicando desempenho comparável entre os algoritmos testados.`);
                 }
             }
 
