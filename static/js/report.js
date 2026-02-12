@@ -426,7 +426,6 @@ function collectReportData() {
 async function captureReportImages(data) {
     const imgs = {};
     const enabledKeys = data.enabledKeys;
-    const functionExpr = data.params.function_expr;
     const plotIds = { ag: 'agPlot', pso: 'psoPlot', ed: 'edPlot' };
 
     for (const k of enabledKeys) {
@@ -436,15 +435,6 @@ async function captureReportImages(data) {
 
     const convEl = document.getElementById('convergencePlot');
     if (convEl) imgs.convergence = await Plotly.toImage(convEl, { format: 'png', width: 600, height: 350 });
-
-    // Render function expression as math image (LaTeX via KaTeX + SVG -> PNG)
-    if (functionExpr) {
-        try {
-            imgs.function = await renderLatexFunctionImage(functionExpr);
-        } catch (e) {
-            console.warn('Failed to render function LaTeX image:', e);
-        }
-    }
 
     if (data.benchmark && data.benchmark.runHistories) {
         try {
@@ -647,6 +637,37 @@ function enabledFullEN(keys) { return keys.map(k => ALG_NAMES[k].fullEN).join(',
 function enabledShortPT(keys) { return keys.map(k => ALG_NAMES[k].shortPT).join(', '); }
 function enabledShortTitle(keys) { return keys.map(k => ALG_NAMES[k].shortPT).join(' vs '); }
 
+const SUBSCRIPT_MAP = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉' };
+const SUPERSCRIPT_MAP = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '-': '⁻' };
+
+function toSubscriptDigits(digits) {
+    return String(digits).split('').map(ch => SUBSCRIPT_MAP[ch] || ch).join('');
+}
+
+function toSuperscript(value) {
+    return String(value).split('').map(ch => SUPERSCRIPT_MAP[ch] || ch).join('');
+}
+
+function formatObjectiveExpression(expr) {
+    if (!expr) return '';
+
+    let normalized = String(expr);
+    if (typeof ExpressionEvaluator !== 'undefined' && ExpressionEvaluator.normalizeExpression) {
+        normalized = ExpressionEvaluator.normalizeExpression(expr);
+    }
+
+    // x1 -> x₁
+    normalized = normalized.replace(/\bx(\d+)\b/g, (_m, digits) => `x${toSubscriptDigits(digits)}`);
+    // ^2 / ^-1 -> ² / ⁻¹
+    normalized = normalized.replace(/\^\s*(-?\d+)/g, (_m, power) => toSuperscript(power));
+    // * -> ·
+    normalized = normalized.replace(/\*/g, ' · ');
+    // limpeza de espaços
+    normalized = normalized.replace(/\s+/g, ' ').trim();
+
+    return normalized;
+}
+
 function determineWinner(data) {
     const keys = data.enabledKeys;
     const mode = data.params.optimization_mode;
@@ -829,7 +850,7 @@ const REPORT_SECTIONS = [
         id: 'introducao',
         title: '1. Introdução',
         render(ctx) {
-            const { layout, data, images } = ctx;
+            const { layout, data } = ctx;
             const keys = data.enabledKeys;
 
             layout.addSectionHeading('1. Introdução');
@@ -839,12 +860,9 @@ const REPORT_SECTIONS = [
             layout.addText(introSentence);
 
             layout.addSubsectionHeading('1.1 Função Objetivo');
-            // If we have a rendered math image, include it; otherwise fall back to plain text
-            if (images && images.function) {
-                layout.addImage(images.function, 'Função Objetivo (renderização matemática)', 18);
-            } else {
-                layout.addText(`Função: f(x) = ${data.params.function_expr}`);
-            }
+            const formattedExpr = formatObjectiveExpression(data.params.function_expr);
+            layout.addText('Função objetivo:');
+            layout.addText(`f(x) = ${formattedExpr}`, { fontStyle: 'italic', indent: 4 });
             layout.addText(`Domínio: [-5.12, 5.12] em ${data.params.dimensions} dimensões.`);
 
             layout.addSubsectionHeading('1.2 Modo de Otimização');
