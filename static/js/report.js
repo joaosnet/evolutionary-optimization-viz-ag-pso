@@ -637,17 +637,6 @@ function enabledFullEN(keys) { return keys.map(k => ALG_NAMES[k].fullEN).join(',
 function enabledShortPT(keys) { return keys.map(k => ALG_NAMES[k].shortPT).join(', '); }
 function enabledShortTitle(keys) { return keys.map(k => ALG_NAMES[k].shortPT).join(' vs '); }
 
-const SUBSCRIPT_MAP = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉' };
-const SUPERSCRIPT_MAP = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '-': '⁻' };
-
-function toSubscriptDigits(digits) {
-    return String(digits).split('').map(ch => SUBSCRIPT_MAP[ch] || ch).join('');
-}
-
-function toSuperscript(value) {
-    return String(value).split('').map(ch => SUPERSCRIPT_MAP[ch] || ch).join('');
-}
-
 function formatObjectiveExpression(expr) {
     if (!expr) return '';
 
@@ -656,12 +645,8 @@ function formatObjectiveExpression(expr) {
         normalized = ExpressionEvaluator.normalizeExpression(expr);
     }
 
-    // x1 -> x₁
-    normalized = normalized.replace(/\bx(\d+)\b/g, (_m, digits) => `x${toSubscriptDigits(digits)}`);
-    // ^2 / ^-1 -> ² / ⁻¹
-    normalized = normalized.replace(/\^\s*(-?\d+)/g, (_m, power) => toSuperscript(power));
-    // * -> ·
-    normalized = normalized.replace(/\*/g, ' · ');
+    // Mantém ASCII para evitar problemas de encoding no PDF
+    // Ex.: x10, ^2, *, pi
     // limpeza de espaços
     normalized = normalized.replace(/\s+/g, ' ').trim();
 
