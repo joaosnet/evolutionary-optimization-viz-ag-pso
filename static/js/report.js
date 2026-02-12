@@ -571,12 +571,21 @@ async function ensureKaTeXLoaded() {
 
 function expressionToLatex(expr) {
     if (!expr) return '';
+    try {
+        if (typeof window !== 'undefined' && window.math && typeof window.math.parse === 'function') {
+            const node = window.math.parse(expr);
+            let tex = node.toTex({ parenthesis: 'keep', implicit: 'hide' });
+            tex = tex.replace(/\bx(\d+)\b/g, (_m, num) => `x_{${num}}`);
+            return `f(\\mathbf{x}) = ${tex}`;
+        }
+    } catch (_e) {
+        // fallback abaixo
+    }
+
     let s = String(expr);
-    // Convert x1, x2 -> x_{1}
+    s = s.replace(/\\/g, '\\\\');
     s = s.replace(/\b(x)(\d+)/g, (_m, _x, num) => `x_{${num}}`);
-    // Replace * with \cdot for better appearance
     s = s.replace(/\*/g, ' \\cdot ');
-    // Wrap in function form
     return `f(\\mathbf{x}) = ${s}`;
 }
 
@@ -832,7 +841,7 @@ const REPORT_SECTIONS = [
             layout.addSubsectionHeading('1.1 Função Objetivo');
             // If we have a rendered math image, include it; otherwise fall back to plain text
             if (images && images.function) {
-                layout.addImage(images.function, `Função Objetivo: ${data.params.function_expr}`, 18);
+                layout.addImage(images.function, 'Função Objetivo (renderização matemática)', 18);
             } else {
                 layout.addText(`Função: f(x) = ${data.params.function_expr}`);
             }
@@ -1351,6 +1360,13 @@ const REPORT_SECTIONS = [
         title: 'Referências',
         render(ctx) {
             const { layout } = ctx;
+
+            // Sempre inicia referências em uma nova página, separada do conteúdo anterior.
+            layout.doc.addPage();
+            layout.currentCol = 1;
+            layout.isFirstPage = false;
+            layout.columnStartY = layout.cfg.margins.top;
+            layout.cursorY = layout.cfg.margins.top;
 
             layout.addSectionHeading('Referências');
             REPORT_REFERENCES.forEach((ref, i) => {
