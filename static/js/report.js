@@ -426,11 +426,12 @@ async function captureReportImages(data) {
 
     for (const k of enabledKeys) {
         const el = document.getElementById(plotIds[k]);
-        if (el) imgs[k] = await Plotly.toImage(el, { format: 'png', width: 500, height: 400 });
+        // capture at higher resolution for print-quality PDF (use device pixel ratio)
+        if (el) imgs[k] = await Plotly.toImage(el, { format: 'png', width: 1000, height: 800, scale: 2 });
     }
 
     const convEl = document.getElementById('convergencePlot');
-    if (convEl) imgs.convergence = await Plotly.toImage(convEl, { format: 'png', width: 600, height: 350 });
+    if (convEl) imgs.convergence = await Plotly.toImage(convEl, { format: 'png', width: 1200, height: 700, scale: 2 });
 
     if (data.benchmark && data.benchmark.runHistories) {
         try {
@@ -504,16 +505,19 @@ async function captureBenchmarkRunCharts(benchmarkData, enabledKeys, maxRuns = 6
             if (traces.length === 0) continue;
 
             await Plotly.react(plotEl, traces, {
-                width: 700,
-                height: 320,
-                margin: { l: 50, r: 20, t: 28, b: 45 },
+                width: 1000,
+                height: 480,
+                margin: { l: 60, r: 20, t: 36, b: 50 },
                 title: { text: `Benchmark - Execução ${runIdx + 1}`, font: { size: 12 } },
                 xaxis: { title: 'Iteração' },
                 yaxis: { title: 'Fitness' },
+                paper_bgcolor: '#ffffff',
+                plot_bgcolor: '#ffffff',
                 showlegend: enabledKeys.length > 1
             }, { displayModeBar: false, staticPlot: true });
 
-            const image = await Plotly.toImage(plotEl, { format: 'png', width: 700, height: 320 });
+            // export at higher resolution for better print quality
+            const image = await Plotly.toImage(plotEl, { format: 'png', width: 1400, height: 672, scale: 2 });
             charts.push({
                 run: runIdx + 1,
                 image,
