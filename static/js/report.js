@@ -1359,20 +1359,7 @@ const REPORT_SECTIONS = [
         }
     },
 
-    // ── Footer ──────────────────────────────────────────────────────────────
-    {
-        id: 'footer',
-        title: 'Footer',
-        render(ctx) {
-            const { layout } = ctx;
-
-            layout.addSpace(10);
-            layout.doc.setFontSize(8);
-            layout.doc.setTextColor(100);
-            layout.addText(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, { fontSize: 8, fontStyle: 'italic' });
-            layout.doc.setTextColor(0, 0, 0);
-        }
-    }
+    // Encerramento no padrão SBC: sem timestamp no corpo do artigo
 ];
 
 // =============================================================================
