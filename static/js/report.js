@@ -23,6 +23,7 @@ const REPORT_CONFIG = {
     margins: { top: 30, bottom: 20, left: 30, right: 20 },
     colGap: 8,
     font: 'times',
+    maxDetailedBenchmarkRuns: 6,
     metadata: {
         author: 'João da Cruz de Natividade e Silva Neto',
         institution: 'UFPA – Universidade Federal do Pará',
@@ -40,6 +41,12 @@ const ALG_NAMES = {
     ag: { fullPT: 'Algoritmo Genético (AG)', fullEN: 'Genetic Algorithm (GA)', shortPT: 'AG', shortEN: 'GA' },
     pso: { fullPT: 'Otimização por Enxame de Partículas (PSO)', fullEN: 'Particle Swarm Optimization (PSO)', shortPT: 'PSO', shortEN: 'PSO' },
     ed: { fullPT: 'Evolução Diferencial (ED)', fullEN: 'Differential Evolution (DE)', shortPT: 'ED', shortEN: 'DE' }
+};
+
+const ALG_COLORS = {
+    ag: '#0f766e',
+    pso: '#d97706',
+    ed: '#be123c'
 };
 
 // ─── Modelos e Prompts de IA ────────────────────────────────────────────────
@@ -131,15 +138,18 @@ const REPORT_REFERENCES = [
 // =============================================================================
 
 class PdfLayout {
-    constructor(doc, config = REPORT_CONFIG) {
+    constructor(doc, config = REPORT_CONFIG, options = {}) {
         this.doc = doc;
         this.cfg = config;
+        this.totalCols = options.columns === 1 ? 1 : 2;
 
         const m = config.margins;
         this.pageWidth = doc.internal.pageSize.width;   // 210mm
         this.pageHeight = doc.internal.pageSize.height;   // 297mm
         this.contentWidth = this.pageWidth - m.left - m.right;
-        this.colWidth = (this.contentWidth - config.colGap) / 2;
+        this.colWidth = this.totalCols === 1
+            ? this.contentWidth
+            : (this.contentWidth - config.colGap) / 2;
         this.col1X = m.left;
         this.col2X = m.left + this.colWidth + config.colGap;
 
@@ -157,7 +167,7 @@ class PdfLayout {
     /** Garante que há espaço suficiente; se não, pula coluna/página */
     checkSpace(height) {
         if (this.cursorY + height > this.pageHeight - this.cfg.margins.bottom) {
-            if (this.currentCol === 1) {
+            if (this.totalCols === 2 && this.currentCol === 1) {
                 this.currentCol = 2;
                 this.cursorY = this.isFirstPage ? this.columnStartY : this.cfg.margins.top;
             } else {
@@ -172,12 +182,13 @@ class PdfLayout {
 
     /** Retorna posição X da coluna atual */
     getX() {
+        if (this.totalCols === 1) return this.col1X;
         return this.currentCol === 1 ? this.col1X : this.col2X;
     }
 
     /** Pula para a próxima coluna ou página */
     nextColumn() {
-        if (this.currentCol === 1) {
+        if (this.totalCols === 2 && this.currentCol === 1) {
             this.currentCol = 2;
             this.cursorY = this.isFirstPage ? this.columnStartY : this.cfg.margins.top;
         } else {
@@ -359,6 +370,8 @@ function collectReportData() {
             if (typeof benchmarkWilcoxon !== 'undefined' && benchmarkWilcoxon) {
                 wilcoxon = benchmarkWilcoxon;
             }
+            const runHistories = (typeof benchmarkRunHistories !== 'undefined' && benchmarkRunHistories) ? benchmarkRunHistories : null;
+            const runMetrics = (typeof benchmarkRunMetrics !== 'undefined' && benchmarkRunMetrics) ? benchmarkRunMetrics : null;
             if (typeof benchmarkMaxFEs !== 'undefined') maxFEs = benchmarkMaxFEs;
             if (typeof benchmarkGlobalMin !== 'undefined') globalMin = benchmarkGlobalMin;
 
@@ -368,6 +381,7 @@ function collectReportData() {
                 isTie: sorted.length >= 2 && sorted[0].wins === sorted[1].wins,
                 // CEC data
                 errorStats, successRate, checkpoints, wilcoxon, maxFEs, globalMin,
+                runHistories, runMetrics,
                 successThreshold: (typeof CEC_SUCCESS_THRESHOLD !== 'undefined') ? CEC_SUCCESS_THRESHOLD : 1e-8,
                 checkpointPcts: (typeof CEC_CHECKPOINT_PCTS !== 'undefined') ? CEC_CHECKPOINT_PCTS : []
             };
@@ -409,8 +423,10 @@ function collectReportData() {
 //  Helper — captura de imagens (Plotly)
 // =============================================================================
 
-async function captureReportImages(enabledKeys, functionExpr) {
+async function captureReportImages(data) {
     const imgs = {};
+    const enabledKeys = data.enabledKeys;
+    const functionExpr = data.params.function_expr;
     const plotIds = { ag: 'agPlot', pso: 'psoPlot', ed: 'edPlot' };
 
     for (const k of enabledKeys) {
@@ -430,7 +446,100 @@ async function captureReportImages(enabledKeys, functionExpr) {
         }
     }
 
+    if (data.benchmark && data.benchmark.runHistories) {
+        try {
+            const detailedRuns = await captureBenchmarkRunCharts(
+                data.benchmark,
+                enabledKeys,
+                REPORT_CONFIG.maxDetailedBenchmarkRuns || 6
+            );
+            imgs.benchmarkRuns = detailedRuns.runs;
+            imgs.benchmarkRunsMeta = {
+                shown: detailedRuns.runs.length,
+                total: detailedRuns.totalRuns
+            };
+        } catch (e) {
+            console.warn('Failed to render benchmark run charts:', e);
+        }
+    }
+
     return imgs;
+}
+
+function pickRunIndices(totalRuns, maxRuns) {
+    if (totalRuns <= 0) return [];
+    if (maxRuns <= 0) return [];
+    if (totalRuns <= maxRuns) return Array.from({ length: totalRuns }, (_, i) => i);
+
+    const indices = new Set();
+    for (let i = 0; i < maxRuns; i++) {
+        const pos = Math.round((i * (totalRuns - 1)) / (maxRuns - 1));
+        indices.add(pos);
+    }
+    return Array.from(indices).sort((a, b) => a - b);
+}
+
+async function captureBenchmarkRunCharts(benchmarkData, enabledKeys, maxRuns = 6) {
+    if (!benchmarkData || !benchmarkData.runHistories) return [];
+
+    const runCount = Math.max(
+        ...enabledKeys.map(k => (benchmarkData.runHistories[k] && benchmarkData.runHistories[k].length) || 0),
+        0
+    );
+    if (runCount === 0) return { runs: [], totalRuns: 0 };
+
+    const runIndices = pickRunIndices(runCount, maxRuns);
+
+    const plotEl = document.createElement('div');
+    plotEl.style.position = 'fixed';
+    plotEl.style.left = '-99999px';
+    plotEl.style.top = '0';
+    plotEl.style.width = '700px';
+    plotEl.style.height = '320px';
+    document.body.appendChild(plotEl);
+
+    const charts = [];
+    try {
+        for (const runIdx of runIndices) {
+            const traces = [];
+            enabledKeys.forEach(k => {
+                const y = benchmarkData.runHistories[k]?.[runIdx];
+                if (Array.isArray(y) && y.length > 0) {
+                    traces.push({
+                        x: y.map((_, i) => i),
+                        y,
+                        mode: 'lines',
+                        name: ALG_NAMES[k].shortPT,
+                        line: { color: ALG_COLORS[k] }
+                    });
+                }
+            });
+
+            if (traces.length === 0) continue;
+
+            await Plotly.react(plotEl, traces, {
+                width: 700,
+                height: 320,
+                margin: { l: 50, r: 20, t: 28, b: 45 },
+                title: { text: `Benchmark - Execução ${runIdx + 1}`, font: { size: 12 } },
+                xaxis: { title: 'Iteração' },
+                yaxis: { title: 'Fitness' },
+                showlegend: enabledKeys.length > 1
+            }, { displayModeBar: false, staticPlot: true });
+
+            const image = await Plotly.toImage(plotEl, { format: 'png', width: 700, height: 320 });
+            charts.push({
+                run: runIdx + 1,
+                image,
+                metrics: benchmarkData.runMetrics?.[runIdx] || null
+            });
+        }
+    } finally {
+        try { Plotly.purge(plotEl); } catch (_e) { /* noop */ }
+        document.body.removeChild(plotEl);
+    }
+
+    return { runs: charts, totalRuns: runCount };
 }
 
 // ─── Math Rendering Helpers (KaTeX) ───────────────────────────────────────
@@ -894,7 +1003,7 @@ const REPORT_SECTIONS = [
         id: 'benchmark',
         title: 'Benchmark CEC',
         render(ctx) {
-            const { layout, data } = ctx;
+            const { layout, data, images } = ctx;
             const b = data.benchmark;
             if (!b) return;
 
@@ -974,6 +1083,35 @@ const REPORT_SECTIONS = [
                     { fontSize: 7, cellPadding: 1 }
                 );
                 layout.addText('Tabela mostra a média do erro nas execuções independentes em cada checkpoint de FEs.');
+            }
+
+            // 5.X Gráficos por execução (iteração a iteração)
+            subSec++;
+            if (images && images.benchmarkRuns && images.benchmarkRuns.length > 0) {
+                layout.addSubsectionHeading(`5.${subSec} Convergência por Execução (Geração)`);
+                const fmtFixed = (v) => Number.isFinite(v) ? v.toFixed(6) : 'N/A';
+
+                const shownRuns = images.benchmarkRunsMeta?.shown || images.benchmarkRuns.length;
+                const totalRuns = images.benchmarkRunsMeta?.total || shownRuns;
+                if (totalRuns > shownRuns) {
+                    layout.addText(`Para evitar relatórios muito longos, esta seção mostra ${shownRuns} execuções representativas de um total de ${totalRuns}. As métricas agregadas consideram todas as execuções.`);
+                }
+
+                images.benchmarkRuns.forEach(runData => {
+                    layout.addImage(runData.image, `Benchmark - Execução ${runData.run} (Fitness vs Iteração)`, 42);
+
+                    if (runData.metrics) {
+                        const runHead = ['Métrica', ...keys.map(k => ALG_NAMES[k].shortPT)];
+                        const finalFitnessRow = ['Fitness final', ...keys.map(k => fmtFixed(runData.metrics.scores?.[k]))];
+                        const finalErrorRow = ['Erro final', ...keys.map(k => {
+                            const err = runData.metrics.errors?.[k];
+                            return Number.isFinite(err) ? err.toExponential(2) : 'N/A';
+                        })];
+                        const iterRow = ['Iterações', ...keys.map(() => runData.metrics.iterations ?? 'N/A')];
+                        const feRow = ['FEs', ...keys.map(() => runData.metrics.fes ?? 'N/A')];
+                        layout.addTable(runHead, [finalFitnessRow, finalErrorRow, iterRow, feRow], { fontSize: 8, cellPadding: 1.2 });
+                    }
+                });
             }
 
             // 5.5 Wilcoxon Signed-Rank Test
@@ -1255,7 +1393,7 @@ async function generatePdfReport() {
         const data = collectReportData();
 
         // 2. Captura imagens
-        const images = await captureReportImages(data.enabledKeys, data.params.function_expr);
+        const images = await captureReportImages(data);
 
         // 3. Cria documento
         const doc = new jsPDF();
@@ -1270,7 +1408,9 @@ async function generatePdfReport() {
         });
 
         // 4. Cria layout engine
-        const layout = new PdfLayout(doc);
+        const layout = new PdfLayout(doc, REPORT_CONFIG, {
+            columns: data.enabledKeys.length === 1 ? 1 : 2
+        });
 
         // 5. Renderiza cada seção
         const ctx = { layout, data, images };

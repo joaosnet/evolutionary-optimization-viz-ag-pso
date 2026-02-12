@@ -1467,6 +1467,8 @@ let benchmarkErrorResults = null;   // { ag: [errors per run], pso: [...], ed: [
 let benchmarkSuccessCount = null;   // { ag: count, pso: count, ed: count }
 let benchmarkCheckpoints = null;    // { ag: [[checkpoint errors per run]], ... }
 let benchmarkWilcoxon = null;       // Computed after benchmark finishes
+let benchmarkRunHistories = null;   // { ag: [[fitness by iter per run]], pso: [...], ed: [...] }
+let benchmarkRunMetrics = null;     // [{ run, iterations, fes, scores:{}, errors:{} }]
 const CEC_SUCCESS_THRESHOLD = 1e-8;
 const CEC_CHECKPOINT_PCTS = [0.01, 0.02, 0.03, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
 
@@ -1525,6 +1527,8 @@ function runBenchmark() {
     benchmarkSuccessCount = { ag: 0, pso: 0, ed: 0 };
     benchmarkCheckpoints = { ag: [], pso: [], ed: [] };
     benchmarkWilcoxon = null;
+    benchmarkRunHistories = { ag: [], pso: [], ed: [] };
+    benchmarkRunMetrics = [];
 
     // Compute max iterations from MaxFEs
     const popSize = parseInt(document.getElementById('pop_size')?.value) || 50;
@@ -1570,6 +1574,11 @@ function startBenchmarkRun() {
     benchmarkCurrentIter = 0;
     benchmarkTotalFEs = 0; // Reset FE counter for this run
 
+    const enabledKeys = getEnabledKeys();
+    enabledKeys.forEach(k => {
+        if (!benchmarkRunHistories[k][benchmarkRunIndex]) benchmarkRunHistories[k][benchmarkRunIndex] = [];
+    });
+
     // Reset convergence plot for this run
     try {
         const plotEl = document.getElementById('convergencePlot');
@@ -1589,6 +1598,15 @@ function startBenchmarkRun() {
     if (enabled.ag && gaInstance) { const s = gaInstance.getState(); data.ag = { ...s, best_score: s.bestScore, max_iteration: s.maxIteration }; }
     if (enabled.pso && psoInstance) { const s = psoInstance.getState(); data.pso = { ...s, best_score: s.bestScore, max_iteration: s.maxIteration }; }
     if (enabled.ed && edInstance) { const s = edInstance.getState(); data.ed = { ...s, best_score: s.bestScore, max_iteration: s.maxIteration }; }
+
+    // Record initial fitness (iteration 0) for benchmark run history
+    enabledKeys.forEach(k => {
+        const inst = k === 'ag' ? gaInstance : k === 'pso' ? psoInstance : edInstance;
+        if (inst && Number.isFinite(inst.bestScore)) {
+            benchmarkRunHistories[k][benchmarkRunIndex].push(inst.bestScore);
+        }
+    });
+
     updateDashboard(data);
 
     // Update progress label
@@ -1622,18 +1640,27 @@ function benchmarkAnimatedStep() {
     if (enabled.ag && gaInstance) {
         const s = gaInstance.getState();
         if (Number.isFinite(s.bestScore)) historyCache.ag[s.iteration] = s.bestScore;
+        if (Number.isFinite(s.bestScore) && benchmarkRunHistories?.ag?.[benchmarkRunIndex]) {
+            benchmarkRunHistories.ag[benchmarkRunIndex].push(s.bestScore);
+        }
         currentIter = s.iteration;
         agScoreEl.textContent = Number.isFinite(s.bestScore) ? s.bestScore.toFixed(4) : "Inf";
     }
     if (enabled.pso && psoInstance) {
         const s = psoInstance.getState();
         if (Number.isFinite(s.bestScore)) historyCache.pso[s.iteration] = s.bestScore;
+        if (Number.isFinite(s.bestScore) && benchmarkRunHistories?.pso?.[benchmarkRunIndex]) {
+            benchmarkRunHistories.pso[benchmarkRunIndex].push(s.bestScore);
+        }
         currentIter = s.iteration;
         psoScoreEl.textContent = Number.isFinite(s.bestScore) ? s.bestScore.toFixed(4) : "Inf";
     }
     if (enabled.ed && edInstance) {
         const s = edInstance.getState();
         if (Number.isFinite(s.bestScore)) historyCache.ed[s.iteration] = s.bestScore;
+        if (Number.isFinite(s.bestScore) && benchmarkRunHistories?.ed?.[benchmarkRunIndex]) {
+            benchmarkRunHistories.ed[benchmarkRunIndex].push(s.bestScore);
+        }
         currentIter = s.iteration;
         edScoreEl.textContent = Number.isFinite(s.bestScore) ? s.bestScore.toFixed(4) : "Inf";
     }
@@ -1705,14 +1732,19 @@ function benchmarkAnimatedStep() {
 
     // Check if this run is done
     if (runDone) {
+        const runScores = {};
+        const runErrors = {};
+
         // Record results for enabled algorithms
         enabledKeys.forEach(k => {
             const inst = k === 'ag' ? gaInstance : k === 'pso' ? psoInstance : edInstance;
             if (inst) {
                 benchmarkResults[k].push(inst.bestScore);
+                runScores[k] = inst.bestScore;
                 // CEC: Record error = |bestScore - globalMin|
                 const error = Math.abs(inst.bestScore - benchmarkGlobalMin);
                 benchmarkErrorResults[k].push(error);
+                runErrors[k] = error;
                 // CEC: Success if error < threshold
                 if (error < CEC_SUCCESS_THRESHOLD) benchmarkSuccessCount[k]++;
                 // CEC: Record checkpoint errors (final state at 100%)
@@ -1727,6 +1759,14 @@ function benchmarkAnimatedStep() {
                 });
             }
         });
+
+        benchmarkRunMetrics[benchmarkRunIndex] = {
+            run: benchmarkRunIndex + 1,
+            iterations: benchmarkCurrentIter,
+            fes: benchmarkTotalFEs,
+            scores: runScores,
+            errors: runErrors
+        };
 
         // Determine run winner among enabled algorithms
         const mode = getOptimizationMode();
