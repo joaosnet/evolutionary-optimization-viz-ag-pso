@@ -4,7 +4,26 @@
  * Reference: CEC 2017 Problem Definitions and Evaluation Criteria
  */
 
+function buildRastriginExpression(dimensions) {
+    const terms = [];
+    for (let i = 1; i <= dimensions; i += 1) {
+        terms.push(`(x${i}^2 - 10 * cos(2 * pi * x${i}))`);
+    }
+    return `${10 * dimensions} + ${terms.join(' + ')}`;
+}
+
 const BENCHMARKS = {
+    f6_10d: {
+        name: "F6 (10D)",
+        expression: buildRastriginExpression(10),
+        dimensions: 10,
+        domain: [-5.12, 5.12],
+        globalMin: 0,
+        globalMinPosition: Array(10).fill(0),
+        category: "multimodal",
+        type: "min"
+    },
+
     // ── Unimodal Functions ──────────────────────────────────────────────────
     sphere: {
         name: "Sphere",

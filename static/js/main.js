@@ -85,8 +85,16 @@ const historyCache = {
     ed: []
 };
 
-const DEFAULT_EXPRESSION = '0.5 - ((sin(sqrt(x1^2 + x2^2))^2 - 0.5) / (1 + 0.001*(x1^2 + x2^2))^2)';
-const DEFAULT_DIMENSIONS = 2;
+function buildF6Expression(dimensions = 10) {
+    const terms = [];
+    for (let i = 1; i <= dimensions; i += 1) {
+        terms.push(`(x${i}^2 - 10 * cos(2 * pi * x${i}))`);
+    }
+    return `${10 * dimensions} + ${terms.join(' + ')}`;
+}
+
+const DEFAULT_DIMENSIONS = 10;
+const DEFAULT_EXPRESSION = buildF6Expression(DEFAULT_DIMENSIONS);
 let currentDimensions = DEFAULT_DIMENSIONS;
 let compiledExpression = null;
 let currentExpression = DEFAULT_EXPRESSION;
@@ -1334,6 +1342,10 @@ function handleOptimizationChange() {
 function initOptimizationControls() {
     const modeSelect = document.getElementById('optimization_mode');
     const targetInput = document.getElementById('optimization_target');
+
+    if (modeSelect) {
+        modeSelect.value = 'min';
+    }
 
     if (modeSelect) {
         modeSelect.addEventListener('change', handleOptimizationChange);

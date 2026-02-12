@@ -71,7 +71,7 @@ const REPORT_AI_PROMPTS = [
     'não está dando para resetar',
     'Ainda não é possivel resetar ao estado inicial, de poder voltar a qualquer iteracao',
     'syntax error in part "*(x1^2+x2^2))^2)" (char 44',
-    'Implementar Evolução Diferencial (ED) como terceiro algoritmo de otimização',
+    'Implementar o ED para f6 de 10 variáveis',
     'Remover backend Python e tornar client-only para GitHub Pages',
     'Adicionar benchmark multi-run com animação em tempo real e exibição de vencedor',
     'Adicionar modo foco por algoritmo — clicar no badge expande o card',
@@ -87,7 +87,7 @@ const REPORT_AI_PROMPTS = [
 const ED_DEVELOPMENT_HISTORY = [
     {
         phase: 'Concepção e Implementação Inicial',
-        description: 'A Evolução Diferencial (ED) foi adicionada como terceiro algoritmo metaheurístico ao dashboard, que originalmente continha apenas AG e PSO. A implementação seguiu a estratégia clássica DE/rand/1/bin proposta por Storn e Price (1997).'
+        description: 'A Evolução Diferencial (ED) foi adicionada como terceiro algoritmo metaheurístico ao dashboard, que originalmente continha apenas AG e PSO. A implementação teve como alvo o benchmark f6 com 10 variáveis (D=10), seguindo a estratégia clássica DE/rand/1/bin proposta por Storn e Price (1997).'
     },
     {
         phase: 'Arquitetura de Classes',
