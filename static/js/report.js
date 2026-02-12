@@ -115,11 +115,7 @@ const ED_DEVELOPMENT_HISTORY = [
     },
     {
         phase: 'Seleção Dinâmica de Algoritmos',
-        description: 'Toggle on/off foi adicionado a cada card de algoritmo. O ED pode ser habilitado/desabilitado independentemente, com o grid se ajustando dinamicamente (1, 2 ou 3 colunas). Toda a simulação, benchmark e relatório PDF respeitam a seleção.'
-    },
-    {
-        phase: 'Refatoração do Relatório PDF',
-        description: 'O sistema de geração de relatório foi modularizado em seções independentes (report.js), facilitando manutenção. O ED aparece dinamicamente em todas as seções conforme habilitado: configuração, resultados, convergência, discussão e conclusões.'
+        description: 'Toggle on/off foi adicionado a cada card de algoritmo. O ED pode ser habilitado/desabilitado independentemente, com o grid se ajustando dinamicamente (1, 2 ou 3 colunas). Toda a simulação e benchmark respeitam a seleção.'
     }
 ];
 
